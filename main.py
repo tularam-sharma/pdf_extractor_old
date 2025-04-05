@@ -9,16 +9,21 @@ from PySide6.QtWidgets import (
     QPushButton, QLabel, QStackedWidget, QFileDialog, QMessageBox,
     QScrollArea, QFrame, QSplitter, QGridLayout, QLineEdit, QComboBox,
     QListWidget, QProgressBar, QTableWidget, QTableWidgetItem, QHeaderView,
-    QGroupBox
+    QGroupBox, QMenu, QMenuBar
 )
 from PySide6.QtCore import Qt, Signal, QObject, QRect
-from PySide6.QtGui import QFont, QIcon
+from PySide6.QtGui import QFont, QIcon, QAction
 from pdf_processor import PDFProcessor
-from invoice_config import InvoiceConfigScreen
 from template_manager import TemplateManager
 from invoice_section_viewer import InvoiceSectionViewer
-from multi_page_processor import MultiPageProcessor
 from bulk_processor import BulkProcessor
+from user_management import UserManagement
+from role_based_ui import (
+    MainDashboard, TemplateManagementCard, 
+    BulkExtractionCard, UploadProcessCard, RoleBasedWidget,
+    RoleBasedPDFProcessor
+)
+from user_management_ui import UserManagementDialog, RoleManagementDialog
 import pandas as pd
 import fitz
 import pypdf_table_extraction
@@ -29,201 +34,171 @@ class PDFHarvest(QMainWindow):
         self.setWindowTitle("PDF Harvest")
         self.setMinimumSize(1200, 800)
         
+        # Initialize user management
+        self.user_management = UserManagement()
+        
+        # Create menu bar
+        self.create_menus()
+        
         # Create stacked widget for multiple screens
         self.stacked_widget = QStackedWidget()
         self.setCentralWidget(self.stacked_widget)
         
-        # Create and add main screen
-        self.main_screen = QWidget()
-        self.setup_main_screen()
-        self.stacked_widget.addWidget(self.main_screen)
+        # Create and add login screen
+        self.show_login_on_start = False  # Set to False to bypass login at startup
         
-        # Create and add PDF processor screen
-        self.pdf_processor = PDFProcessor()
+        # Create and add main dashboard with role-based components
+        self.main_dashboard = MainDashboard(self.user_management)
+        self.main_dashboard.show_pdf_processor.connect(self.show_pdf_processor)
+        self.main_dashboard.show_template_manager.connect(self.show_template_manager)
+        self.main_dashboard.show_bulk_processor.connect(self.show_bulk_processor)
+        self.main_dashboard.show_user_management.connect(self.show_user_management)
+        # Connect login signals - use dashboard's integrated login panel
+        self.main_dashboard.user_profile.login_requested.connect(self.handle_login_request)
+        # Connect logout signal to update menus
+        self.main_dashboard.user_profile.logout_requested.connect(self.update_menus)
+        # Connect integrated login success signal
+        self.main_dashboard.login_successful.connect(self.handle_login_success)
+        self.stacked_widget.addWidget(self.main_dashboard)
+        
+        # Initialize other objects as None first, then create them
+        self.pdf_processor = None
+        self.template_manager = None
+        self.multi_page_processor = None
+        self.invoice_viewer = None
+        
+        # Create and add PDF processor screen (now using role-based version)
+        self.pdf_processor = RoleBasedPDFProcessor()
+        self.pdf_processor.set_user_management(self.user_management)
         self.stacked_widget.addWidget(self.pdf_processor)
-        
-        # Create and add invoice configuration screen
-        self.invoice_config = InvoiceConfigScreen()
-        self.stacked_widget.addWidget(self.invoice_config)
         
         # Create and add template manager screen
         self.template_manager = TemplateManager(self.pdf_processor)
         self.stacked_widget.addWidget(self.template_manager)
         
-        # Multi-page processor will be created when needed
-        self.multi_page_processor = None
-        self.invoice_viewer = None
-        
-        # Connect signals
-        self.pdf_processor.next_clicked.connect(self.show_invoice_config)
-        self.invoice_config.go_back.connect(lambda: self.stacked_widget.setCurrentWidget(self.pdf_processor))
-        self.invoice_config.config_completed.connect(self.handle_config_completed)
-        
         # Template manager signals
-        self.template_manager.go_back.connect(lambda: self.stacked_widget.setCurrentWidget(self.main_screen))
+        self.template_manager.go_back.connect(lambda: self.stacked_widget.setCurrentWidget(self.main_dashboard))
         self.template_manager.template_selected.connect(self.apply_template)
 
-    def setup_main_screen(self):
-        main_layout = QVBoxLayout(self.main_screen)
+        # Check if we should show login on start
+        if self.show_login_on_start:
+            self.handle_login_request()
+        else:
+            self.stacked_widget.setCurrentWidget(self.main_dashboard)
+
+    def create_menus(self):
+        """Create application menu bar with various options."""
+        menubar = QMenuBar(self)
+        self.setMenuBar(menubar)
         
-        # Create header
-        header_layout = QHBoxLayout()
-        logo_label = QLabel("📄 Invoice Harvest")
-        logo_label.setFont(QFont("Arial", 16))
-        header_layout.addWidget(logo_label)
+        # File menu
+        file_menu = menubar.addMenu('&File')
         
-        # Add header buttons
-        # github_btn = QPushButton("Github")
-        # # github_btn.setIcon(QIcon.fromTheme("github"))
-        # templates_btn = QPushButton("Templates")
-        # templates_btn.clicked.connect(self.show_template_manager)
-        # bulk_upload_btn = QPushButton("Bulk Upload")
-        # upload_invoice_btn = QPushButton("Upload Invoice")
-        # upload_invoice_btn.setStyleSheet(
-        #     "background-color: #4169E1; color: white; padding: 8px 16px;"
-        # )
-        # upload_invoice_btn.clicked.connect(self.upload_invoice)
+        # Exit action
+        exit_action = QAction('E&xit', self)
+        exit_action.setShortcut('Ctrl+Q')
+        exit_action.setStatusTip('Exit application')
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
         
-        header_layout.addStretch()
-        # header_layout.addWidget(github_btn)
-        # header_layout.addWidget(templates_btn)
-        # header_layout.addWidget(bulk_upload_btn)
-        # header_layout.addWidget(upload_invoice_btn)
+        # Admin menu (only for developers with user_management permission)
+        self.admin_menu = menubar.addMenu('&Admin')
         
-        main_layout.addLayout(header_layout)
+        # User management action
+        self.user_management_action = QAction('&User Management', self)
+        self.user_management_action.setStatusTip('Manage users and permissions')
+        self.user_management_action.triggered.connect(self.show_user_management)
+        self.admin_menu.addAction(self.user_management_action)
         
-        # Create content area
-        content_widget = QWidget()
-        content_layout = QVBoxLayout(content_widget)
+        # Role management action
+        self.role_management_action = QAction('&Role Management', self)
+        self.role_management_action.setStatusTip('Manage roles and their permissions')
+        self.role_management_action.triggered.connect(self.show_role_management)
+        self.admin_menu.addAction(self.role_management_action)
         
-        # Add title and subtitle
-        title = QLabel("Invoice Harvest")
-        title.setFont(QFont("Arial", 32))
-        title.setAlignment(Qt.AlignCenter)
-        subtitle = QLabel("Easily extract tables from PDF invoices with visual selection and mapping")
-        subtitle.setFont(QFont("Arial", 14))
-        subtitle.setAlignment(Qt.AlignCenter)
-        subtitle.setStyleSheet("color: #666;")
+        # Initially disable admin menu
+        self.admin_menu.setEnabled(False)
         
-        content_layout.addWidget(title)
-        content_layout.addWidget(subtitle)
-        content_layout.addSpacing(40)
+        # Help menu
+        help_menu = menubar.addMenu('&Help')
         
-        # Create cards layout
-        cards_layout = QHBoxLayout()
-        
-        # Upload & Process card
-        upload_card = self.create_card(
-            "⬆️ Upload & Process",
-            "Upload a PDF invoice and extract tables visually",
-            "Upload your invoice PDF, select table regions visually, and configure column mapping to extract structured data.",
-            "Get Started",
-            self.show_pdf_processor
-        )
-        
-        # Template Management card
-        template_card = self.create_card(
-            "⚙️ Template Management",
-            "Create and manage invoice templates",
-            "Save extraction settings as templates for processing similar invoices. Configure headers, table regions, and summary sections.",
-            "Manage Templates",
-            self.show_template_manager
-        )
-        
-        # Bulk Extraction card
-        bulk_card = self.create_card(
-            "📦 Bulk Extraction",
-            "Process multiple invoices at once",
-            "Upload multiple PDF invoices and process them in batch using saved templates. Export results in various formats.",
-            "Bulk Process",
-            self.show_bulk_processor
-        )
-        
-        cards_layout.addWidget(upload_card)
-        cards_layout.addWidget(template_card)
-        cards_layout.addWidget(bulk_card)
-        
-        content_layout.addLayout(cards_layout)
-        content_layout.addStretch()
-        
-        main_layout.addWidget(content_widget)
+        # About action
+        about_action = QAction('&About', self)
+        about_action.setStatusTip('About this application')
+        about_action.triggered.connect(self.show_about_dialog)
+        help_menu.addAction(about_action)
     
-    def create_card(self, title, subtitle, description, button_text, button_callback=None):
-        card = QWidget()
-        card.setStyleSheet("""
-            QWidget {
-                background-color: white;
-                border-radius: 8px;
-                padding: 20px;
-            }
-            QPushButton {
-                background-color: #4169E1;
-                color: white;
-                padding: 10px;
-                border-radius: 4px;
-                min-width: 200px;
-                text-align: center;
-            }
-            QPushButton:hover {
-                background-color: #3158D3;
-            }
-        """)
+    def update_menus(self):
+        """Update menu availability based on user permissions."""
+        if self.user_management.get_current_user() and self.user_management.has_permission('user_management'):
+            self.admin_menu.setEnabled(True)
+        else:
+            self.admin_menu.setEnabled(False)
+
+    def handle_login_request(self):
+        """Show the login panel in the dashboard."""
+        # Switch to main dashboard if not already there
+        self.stacked_widget.setCurrentWidget(self.main_dashboard)
+        # Update dashboard to show login panel
+        self.main_dashboard.update_dashboard()
+        # Focus on username field
+        if hasattr(self.main_dashboard, 'username_edit'):
+            self.main_dashboard.username_edit.setFocus()
+
+    def handle_login_success(self, user):
+        """Handle successful login."""
+        # Reset the state of all screens first
+        for i in range(self.stacked_widget.count()):
+            widget = self.stacked_widget.widget(i)
+            if widget != self.main_dashboard:
+                widget.setVisible(False)
         
-        layout = QVBoxLayout(card)
-        layout.setSpacing(15)
-        layout.setContentsMargins(20, 20, 20, 20)
+        # Make sure the main dashboard is visible and in front
+        self.main_dashboard.setVisible(True)
+        self.stacked_widget.setCurrentWidget(self.main_dashboard)
         
-        # Create a container for the icon and title
-        icon_title_container = QWidget()
-        icon_title_layout = QVBoxLayout(icon_title_container)  # Changed to VBoxLayout for vertical alignment
-        icon_title_layout.setContentsMargins(0, 0, 0, 0)
-        icon_title_layout.setSpacing(10)
+        # Update the main dashboard to reflect the user's permissions
+        self.main_dashboard.update_dashboard()
         
-        # Extract emoji from title and create a label for it
-        emoji = title.split()[0]  # Get the emoji part
-        icon_label = QLabel(emoji)
-        icon_label.setFont(QFont("Arial", 32))  # Increased font size for better visibility
-        icon_label.setAlignment(Qt.AlignCenter)
-        icon_title_layout.addWidget(icon_label)
+        # Update menus based on user permissions
+        self.update_menus()
         
-        # Add the rest of the title (without emoji)
-        title_text = " ".join(title.split()[1:])  # Get the text part
-        title_label = QLabel(title_text)
-        title_label.setFont(QFont("Arial", 18))
-        title_label.setAlignment(Qt.AlignCenter)  # Center the title text
-        icon_title_layout.addWidget(title_label)
-        
-        layout.addWidget(icon_title_container)
-        
-        subtitle_label = QLabel(subtitle)
-        subtitle_label.setFont(QFont("Arial", 12))
-        subtitle_label.setStyleSheet("color: #666;")
-        subtitle_label.setAlignment(Qt.AlignCenter)  # Center the subtitle
-        layout.addWidget(subtitle_label)
-        
-        desc_label = QLabel(description)
-        desc_label.setWordWrap(True)
-        desc_label.setStyleSheet("color: #666;")
-        desc_label.setAlignment(Qt.AlignCenter)  # Center the description
-        layout.addWidget(desc_label)
-        
-        layout.addStretch()
-        
-        # Create a container for the button to ensure proper centering
-        button_container = QWidget()
-        button_layout = QHBoxLayout(button_container)
-        button_layout.setContentsMargins(0, 0, 0, 0)
-        
-        button = QPushButton(button_text)
-        if button_callback:
-            button.clicked.connect(button_callback)
-        button_layout.addWidget(button, alignment=Qt.AlignCenter)
-        
-        layout.addWidget(button_container)
-        
-        return card
+        # Show welcome message
+        QMessageBox.information(
+            self, 
+            "Login Successful", 
+            f"Welcome, {user['full_name']}!\n\nYou are logged in as: {user['role_name']}"
+        )
 
     def show_pdf_processor(self):
+        """Show the PDF processor screen with proper transition."""
+        # Check if user has permission
+        if (not self.user_management.get_current_user() or 
+            not self.user_management.has_permission("draw_pdf_rules")):
+            result = QMessageBox.question(
+                self,
+                "Permission Required",
+                "You need to log in with appropriate permissions to access this feature.\n\nWould you like to log in now?",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            
+            if result == QMessageBox.Yes:
+                # Show login panel in dashboard
+                self.handle_login_request()
+            return
+        
+        # Hide all widgets in the stacked widget to prevent overlapping
+        for i in range(self.stacked_widget.count()):
+            widget = self.stacked_widget.widget(i)
+            if widget:
+                widget.setVisible(False)
+        
+        # Make sure the PDF processor is updated for permissions
+        if hasattr(self, 'pdf_processor') and self.pdf_processor:
+            self.pdf_processor.update_visibility()
+            self.pdf_processor.setVisible(True)
+            
+            # Now set it as the current widget
         self.stacked_widget.setCurrentWidget(self.pdf_processor)
 
     def show_invoice_config(self):
@@ -231,10 +206,10 @@ class PDFHarvest(QMainWindow):
 
     def handle_config_completed(self, config):
         if config['has_multiple_pages']:
-            # Create multi-page processor with the uploaded sample
+            # Create multi-page processor
             self.multi_page_processor = MultiPageProcessor(
                 config['sample_multi_page_invoice'],
-                has_middle_pages=config['has_middle_pages']
+                has_header_repeat=config['has_header_repeat']
             )
             self.stacked_widget.addWidget(self.multi_page_processor)
             
@@ -242,17 +217,32 @@ class PDFHarvest(QMainWindow):
             self.multi_page_processor.go_back.connect(
                 lambda: self.stacked_widget.setCurrentWidget(self.invoice_config)
             )
-            self.multi_page_processor.config_completed.connect(self.show_section_viewer)
+            self.multi_page_processor.config_completed.connect(self.process_multi_page_invoice)
             
-            # Show multi-page processor screen
+            # Show multi-page processor
             self.stacked_widget.setCurrentWidget(self.multi_page_processor)
         else:
-            # For single page invoices, directly process and show the section viewer
+            # Handle single page invoice as before
             self.process_invoice(self.pdf_processor.pdf_path)
 
-    def show_section_viewer(self, regions):
-        # Process the invoice and show the section viewer
-        self.process_invoice(self.pdf_processor.pdf_path)
+    def process_multi_page_invoice(self, regions):
+        """Process multi-page invoice with configured regions"""
+        # Extract data from all pages
+        all_data = self.pdf_processor.extract_multi_page_invoice()
+        
+        # Create and show the section viewer with multi-page support
+        self.invoice_viewer = InvoiceSectionViewer(
+            self.pdf_processor.pdf_path,
+            all_data['header'],
+            all_data['items'],
+            all_data['summary'],
+            regions,
+            self.pdf_processor.column_lines,
+            is_multi_page=True
+        )
+        
+        self.stacked_widget.addWidget(self.invoice_viewer)
+        self.stacked_widget.setCurrentWidget(self.invoice_viewer)
 
     def process_invoice(self, pdf_path):
         # Extract tables using the provided code
@@ -786,17 +776,60 @@ class PDFHarvest(QMainWindow):
             self.stacked_widget.setCurrentWidget(self.pdf_processor)
 
     def show_template_manager(self):
+        # Only allow if user has permission
+        if (not self.user_management.get_current_user() or 
+            not self.user_management.has_permission("template_management")):
+            QMessageBox.warning(
+                self,
+                "Permission Denied",
+                "You do not have permission to access template management.\n\n"
+                "Please log in with a developer account to access this feature."
+            )
+            return
+            
         self.stacked_widget.setCurrentWidget(self.template_manager)
 
     def show_bulk_processor(self):
-        """Show the bulk processor screen for handling multiple PDFs"""
-        # Create bulk processor if it doesn't exist
+        """Show the bulk processor screen."""
+        # Check if user has permission
+        if (not self.user_management.get_current_user() or 
+            not self.user_management.has_permission("bulk_extraction")):
+            QMessageBox.warning(
+                self,
+                "Permission Denied",
+                "You do not have permission to access bulk extraction.\n\n"
+                "Please log in with an appropriate account to access this feature."
+            )
+            return
+        
+        # Hide all widgets in the stacked widget to prevent overlapping
+        for i in range(self.stacked_widget.count()):
+            widget = self.stacked_widget.widget(i)
+            if widget:
+                widget.setVisible(False)
+            
+        # Initialize bulk processor if it doesn't exist
         if not hasattr(self, 'bulk_processor'):
-            self.bulk_processor = BulkProcessor(self)
+            self.bulk_processor = BulkProcessor()
+            # Connect the go_back signal (not directly to a method)
+            self.bulk_processor.go_back.connect(self.handle_bulk_processor_go_back)
             self.stacked_widget.addWidget(self.bulk_processor)
         
-        # Show the bulk processor screen
+        # Show the bulk processor
+        self.bulk_processor.setVisible(True)
         self.stacked_widget.setCurrentWidget(self.bulk_processor)
+    
+    def handle_bulk_processor_go_back(self):
+        """Handle the go_back signal from the bulk processor."""
+        # Hide all widgets first
+        for i in range(self.stacked_widget.count()):
+            widget = self.stacked_widget.widget(i)
+            if widget:
+                widget.setVisible(False)
+                
+        # Show dashboard and make it current
+        self.main_dashboard.setVisible(True)
+        self.stacked_widget.setCurrentWidget(self.main_dashboard)
 
     def apply_template(self, template):
         """Apply the selected template to the current PDF processor"""
@@ -882,6 +915,49 @@ class PDFHarvest(QMainWindow):
                 self,
                 "Error",
                 f"Failed to switch to template manager: {str(e)}"
+            )
+
+    def show_user_management(self):
+        """Show the user management dialog."""
+        # Check if user has permission
+        if (not self.user_management.get_current_user() or 
+            not self.user_management.has_permission("user_management")):
+            QMessageBox.warning(
+                self,
+                "Permission Denied",
+                "You do not have permission to access user management.\n\n"
+                "Please log in with an administrator account to access this feature."
+            )
+            return
+            
+        dialog = UserManagementDialog(self.user_management, self)
+        dialog.exec()
+    
+    def show_role_management(self):
+        """Show the role management dialog."""
+        # Check if user has permission
+        if (not self.user_management.get_current_user() or 
+            not self.user_management.has_permission("user_management")):
+            QMessageBox.warning(
+                self,
+                "Permission Denied",
+                "You do not have permission to access role management.\n\n"
+                "Please log in with an administrator account to access this feature."
+            )
+            return
+            
+        dialog = RoleManagementDialog(self.user_management, self)
+        dialog.exec()
+    
+    def show_about_dialog(self):
+        """Show the about dialog."""
+        QMessageBox.about(
+            self,
+            "About PDF Harvest",
+            "PDF Harvest\n\n"
+            "Version 1.0.0\n\n"
+            "A PDF invoice data extraction tool with visual selection and mapping capabilities.\n\n"
+            "© 2023 PDF Harvest Team"
             )
 
 if __name__ == '__main__':

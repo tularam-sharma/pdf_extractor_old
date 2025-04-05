@@ -1,12 +1,15 @@
 import sys
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
-                             QLabel, QFileDialog, QScrollArea, QStackedWidget)
+                             QLabel, QFileDialog, QScrollArea, QStackedWidget, QMessageBox, QDialog, QRadioButton, QButtonGroup)
 from PySide6.QtCore import Qt, QRect, QPoint, QSize
 from PySide6.QtGui import QPixmap, QPainter, QPen, QColor, QImage, QFont
 import fitz  # PyMuPDF
 from PIL import Image
 import io
 from PySide6.QtCore import Signal
+from invoice_section_viewer import InvoiceSectionViewer
+import pandas as pd
+import pypdf_table_extraction
 
 class RegionType:
     HEADER = "header"
@@ -127,6 +130,13 @@ class PDFLabel(QLabel):
                 painter.setPen(pen)
                 
                 for i, rect in enumerate(rects):
+                    # Convert dictionary to QRect if needed
+                    if isinstance(rect, dict):
+                        if 'x' in rect and 'y' in rect and 'width' in rect and 'height' in rect:
+                            rect = QRect(rect['x'], rect['y'], rect['width'], rect['height'])
+                        elif 'x1' in rect and 'y1' in rect and 'x2' in rect and 'y2' in rect:
+                            rect = QRect(rect['x1'], rect['y1'], rect['x2'] - rect['x1'], rect['y2'] - rect['y1'])
+                    
                     scaled_rect = QRect(
                         self.mapFromPixmap(rect.topLeft()),
                         self.mapFromPixmap(rect.bottomRight())
@@ -240,6 +250,12 @@ class PDFLabel(QLabel):
                             if 0 not in lines_by_rect:
                                 lines_by_rect[0] = []
                             lines_by_rect[0].append((idx, start, end))
+                        
+                        # Convert dictionary points to QPoint if needed
+                        if isinstance(start, dict) and 'x' in start:
+                            start = QPoint(start['x'], start['y'])
+                        if isinstance(end, dict) and 'x' in end:
+                            end = QPoint(end['x'], end['y'])
                         
                         start = self.mapFromPixmap(start)
                         end = self.mapFromPixmap(end)
@@ -373,6 +389,10 @@ class PDFProcessor(QWidget):
     def __init__(self):
         super().__init__()
         self.pdf_path = None
+        self.multi_page_mode = False  # Track if we're in multi-page mode
+        self.current_page_index = 0  # Track current page being configured
+        self.page_regions = {}  # Store regions for each page
+        self.page_column_lines = {}  # Store column lines for each page
         
         # Updated data structure for regions
         # Instead of a simple list, we'll use a dictionary to track tables in order
@@ -473,11 +493,28 @@ class PDFProcessor(QWidget):
         self.column_btn.setStyleSheet(button_style)
         toolbar.addWidget(self.column_btn)
         
-        # Clear button
-        clear_btn = QPushButton("Clear Drawings")
-        clear_btn.clicked.connect(self.clear_all)
-        clear_btn.setStyleSheet(button_style)
-        toolbar.addWidget(clear_btn)
+        # Clear current page button
+        clear_page_btn = QPushButton("Clear Current Page")
+        clear_page_btn.clicked.connect(self.clear_current_page)
+        clear_page_btn.setStyleSheet(button_style)
+        toolbar.addWidget(clear_page_btn)
+        
+        # Reset button (for full reset)
+        reset_btn = QPushButton("Reset All")
+        reset_btn.clicked.connect(self.clear_all)
+        reset_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #D32F2F;
+                color: white;
+                padding: 8px 16px;
+                border-radius: 4px;
+                min-width: 100px;
+            }
+            QPushButton:hover {
+                background-color: #B71C1C;
+            }
+        """)
+        toolbar.addWidget(reset_btn)
         
         layout.addLayout(toolbar)
         
@@ -580,9 +617,71 @@ class PDFProcessor(QWidget):
         """)
         bottom_toolbar.addWidget(reset_btn)
         
+        # Add page navigation buttons in the center
+        self.prev_page_btn = QPushButton("← Previous Page")
+        self.prev_page_btn.clicked.connect(self.go_to_previous_page)
+        self.prev_page_btn.hide()  # Hidden by default
+        self.prev_page_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4169E1;
+                color: white;
+                padding: 10px 20px;
+                border-radius: 4px;
+                min-width: 120px;
+            }
+            QPushButton:hover {
+                background-color: #3159C1;
+            }
+        """)
+        
+        self.next_page_btn = QPushButton("Next Page →")
+        self.next_page_btn.clicked.connect(self.go_to_next_page)
+        self.next_page_btn.hide()  # Hidden by default
+        self.next_page_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4169E1;
+                color: white;
+                padding: 10px 20px;
+                border-radius: 4px;
+                min-width: 120px;
+            }
+            QPushButton:hover {
+                background-color: #3159C1;
+            }
+        """)
+        
+        # Add Apply to Remaining Pages button
+        self.apply_to_remaining_btn = QPushButton("Apply to Remaining Pages")
+        self.apply_to_remaining_btn.clicked.connect(self.apply_to_remaining_pages)
+        self.apply_to_remaining_btn.hide()  # Hidden by default
+        self.apply_to_remaining_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #28a745;
+                color: white;
+                padding: 10px 20px;
+                border-radius: 4px;
+                min-width: 180px;
+            }
+            QPushButton:hover {
+                background-color: #218838;
+            }
+        """)
+        
+        # Add stretch to push navigation buttons to center
         bottom_toolbar.addStretch()
         
-        next_btn = QPushButton("Next")
+        # Add navigation buttons in the center
+        bottom_toolbar.addWidget(self.prev_page_btn)
+        bottom_toolbar.addWidget(self.next_page_btn)
+        
+        # Add Apply to Remaining Pages button
+        bottom_toolbar.addWidget(self.apply_to_remaining_btn)
+        
+        # Add another stretch to maintain center alignment
+        bottom_toolbar.addStretch()
+        
+        # Add Next button at bottom right
+        next_btn = QPushButton("Next →")
         next_btn.clicked.connect(self.next_step)
         next_btn.setStyleSheet("""
             QPushButton {
@@ -621,6 +720,83 @@ class PDFProcessor(QWidget):
     def load_pdf_file(self, file_path):
         self.pdf_path = file_path
         self.pdf_document = fitz.open(file_path)
+        self.current_page_index = 0
+        self.page_regions = {}
+        self.page_column_lines = {}
+        
+        # Check if PDF has multiple pages
+        if len(self.pdf_document) > 1:
+            # Create a dialog box for user configuration
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Multi-page PDF Configuration")
+            dialog.setMinimumWidth(400)
+            
+            layout = QVBoxLayout(dialog)
+            
+            # Add explanation text
+            explanation = QLabel("This PDF has multiple pages. How would you like to configure the invoice template?")
+            explanation.setWordWrap(True)
+            layout.addWidget(explanation)
+            
+            # Create radio buttons
+            button_group = QButtonGroup(dialog)
+            
+            first_page_radio = QRadioButton("Configure template for first page only")
+            all_pages_radio = QRadioButton("Configure template for all pages")
+            
+            # Set first page as default
+            first_page_radio.setChecked(True)
+            
+            button_group.addButton(first_page_radio)
+            button_group.addButton(all_pages_radio)
+            
+            layout.addWidget(first_page_radio)
+            layout.addWidget(all_pages_radio)
+            
+            # Add buttons
+            button_layout = QHBoxLayout()
+            ok_button = QPushButton("OK")
+            cancel_button = QPushButton("Cancel")
+            
+            button_layout.addWidget(ok_button)
+            button_layout.addWidget(cancel_button)
+            layout.addLayout(button_layout)
+            
+            # Connect signals
+            ok_button.clicked.connect(dialog.accept)
+            cancel_button.clicked.connect(dialog.reject)
+            
+            # Show dialog and get result
+            if dialog.exec_() == QDialog.Accepted:
+                if first_page_radio.isChecked():
+                    self.multi_page_mode = False
+                    self.prev_page_btn.hide()
+                    self.next_page_btn.hide()
+                    self.apply_to_remaining_btn.hide()
+                else:
+                    self.multi_page_mode = True
+                    self.prev_page_btn.show()
+                    self.next_page_btn.show()
+                    self.apply_to_remaining_btn.show()
+                    # Initialize regions and column lines for first page
+                    self.page_regions[0] = {
+                        'header': [],
+                        'items': [],
+                        'summary': []
+                    }
+                    self.page_column_lines[0] = {
+                        RegionType.HEADER: [],
+                        RegionType.ITEMS: [],
+                        RegionType.SUMMARY: []
+                    }
+            else:
+                # User cancelled, close the PDF and return
+                self.pdf_document.close()
+                self.pdf_document = None
+                self.pdf_path = None
+                return
+        
+        # Display the current page
         self.display_current_page()
         self.upload_area.hide()
         self.pdf_label.show()
@@ -629,7 +805,38 @@ class PDFProcessor(QWidget):
         if not self.pdf_document:
             return
             
-        page = self.pdf_document[0]
+        # Get the current page based on multi_page_mode
+        if self.multi_page_mode:
+            page = self.pdf_document[self.current_page_index]
+            # Update status label to indicate current page
+            self.status_label.setText(f"Configuring page {self.current_page_index + 1} of {len(self.pdf_document)}")
+            # Load regions and column lines for current page if they exist
+            if self.current_page_index in self.page_regions:
+                self.regions = self.page_regions[self.current_page_index].copy()
+            else:
+                # Initialize empty regions for new page
+                self.regions = {
+                    'header': [],
+                    'items': [],
+                    'summary': []
+                }
+            
+            if self.current_page_index in self.page_column_lines:
+                self.column_lines = self.page_column_lines[self.current_page_index].copy()
+                # Update table_areas with column lines for current page
+                self.update_table_areas_with_columns()
+            else:
+                # Initialize empty column lines for new page
+                self.column_lines = {
+                    RegionType.HEADER: [],
+                    RegionType.ITEMS: [],
+                    RegionType.SUMMARY: []
+                }
+                self.table_areas = {}  # Reset table_areas for new page
+        else:
+            page = self.pdf_document[0]
+            self.status_label.setText("Single-page mode: Template will be applied to first page only")
+            
         pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
         
         # Convert PyMuPDF pixmap to PIL Image
@@ -643,6 +850,60 @@ class PDFProcessor(QWidget):
         
         self.pdf_label.setPixmap(pixmap)
         self.pdf_label.adjustPixmap()  # Make sure to call adjustPixmap after setting the pixmap
+
+    def update_table_areas_with_columns(self):
+        """Update table_areas with column lines for the current page"""
+        self.table_areas = {}
+        
+        # Process header regions
+        for i, rect in enumerate(self.regions['header']):
+            table_label = f"header_table_{i+1}"
+            columns = []
+            # Get column lines for this table
+            for start, end, rect_idx in self.column_lines[RegionType.HEADER]:
+                if rect_idx == i:
+                    columns.append(start.x())
+            
+            self.table_areas[table_label] = {
+                'type': 'header',
+                'index': i,
+                'rect': rect,
+                'columns': sorted(columns)
+            }
+        
+        # Process items region
+        if self.regions['items']:
+            rect = self.regions['items'][0]
+            table_label = "items_table_1"
+            columns = []
+            # Get column lines for items table
+            for start, end, rect_idx in self.column_lines[RegionType.ITEMS]:
+                if rect_idx == 0:
+                    columns.append(start.x())
+            
+            self.table_areas[table_label] = {
+                'type': 'items',
+                'index': 0,
+                'rect': rect,
+                'columns': sorted(columns)
+            }
+        
+        # Process summary region
+        if self.regions['summary']:
+            rect = self.regions['summary'][0]
+            table_label = "summary_table_1"
+            columns = []
+            # Get column lines for summary table
+            for start, end, rect_idx in self.column_lines[RegionType.SUMMARY]:
+                if rect_idx == 0:
+                    columns.append(start.x())
+            
+            self.table_areas[table_label] = {
+                'type': 'summary',
+                'index': 0,
+                'rect': rect,
+                'columns': sorted(columns)
+            }
 
     def get_region_color(self, region_type):
         colors = {
@@ -760,7 +1021,72 @@ class PDFProcessor(QWidget):
         if hasattr(self, 'active_rect_index'):
             self.active_rect_index = None
 
+    def clear_current_page(self):
+        """Clear drawings only for the current page"""
+        if not self.pdf_document:
+            return
+            
+        # Reset regions and column lines for current page
+        self.regions = {
+            RegionType.HEADER: [],
+            RegionType.ITEMS: [],
+            RegionType.SUMMARY: []
+        }
+        self.column_lines = {
+            RegionType.HEADER: [],
+            RegionType.ITEMS: [],
+            RegionType.SUMMARY: []
+        }
+        
+        # Reset table_areas for current page
+        self.table_areas = {}
+        
+        # Reset drawing state
+        self.current_region_type = None
+        self.drawing = False
+        self.drawing_column = False
+        self.start_point = None
+        self.current_rect = None
+        
+        # Reset multi-table mode
+        self.multi_table_mode = False
+        self.multi_table_btn.setText("Multi-Table Mode: OFF")
+        self.multi_table_btn.setChecked(False)
+        
+        # Update stored regions and column lines for current page if in multi-page mode
+        if self.multi_page_mode:
+            self.page_regions[self.current_page_index] = self.regions.copy()
+            self.page_column_lines[self.current_page_index] = self.column_lines.copy()
+            self.status_label.setText(f"Cleared drawings for page {self.current_page_index + 1} of {len(self.pdf_document)}")
+        else:
+            self.status_label.setText("Cleared all drawings")
+        
+        # Reset button styles
+        button_style = """
+            QPushButton {
+                background-color: #f0f0f0;
+                border: 1px solid #ddd;
+                padding: 8px 16px;
+                border-radius: 4px;
+                min-width: 150px;
+                color: #333333;
+            }
+            QPushButton:hover {
+                background-color: #e0e0e0;
+            }
+        """
+        
+        # Reset all buttons and their styles
+        for btn in [self.header_btn, self.items_btn, self.summary_btn, self.column_btn, self.multi_table_btn]:
+            btn.setChecked(False)
+            btn.setStyleSheet(button_style)
+            btn.setEnabled(True)
+        
+        # Update the display
+        self.pdf_label.update()
+
     def clear_all(self):
+        """Reset everything and remove the uploaded PDF"""
         # Reset regions and column lines
         self.regions = {
             RegionType.HEADER: [],
@@ -787,6 +1113,19 @@ class PDFProcessor(QWidget):
         self.multi_table_mode = False
         self.multi_table_btn.setText("Multi-Table Mode: OFF")
         self.multi_table_btn.setChecked(False)
+        
+        # Reset multi-page mode
+        self.multi_page_mode = False
+        self.current_page_index = 0
+        self.page_regions = {}
+        self.page_column_lines = {}
+        
+        # Hide navigation buttons
+        self.prev_page_btn.hide()
+        self.next_page_btn.hide()
+        self.apply_to_remaining_btn.hide()
+        
+        # Reset status label
         self.status_label.setText("")
         
         # Define default button style
@@ -808,7 +1147,18 @@ class PDFProcessor(QWidget):
         for btn in [self.header_btn, self.items_btn, self.summary_btn, self.column_btn, self.multi_table_btn]:
             btn.setChecked(False)
             btn.setStyleSheet(button_style)
-            btn.setEnabled(True)  # Ensure all buttons are enabled
+            btn.setEnabled(True)
+        
+        # Reset PDF display state
+        self.pdf_path = None
+        if hasattr(self, 'pdf_document'):
+            self.pdf_document.close()
+            self.pdf_document = None
+        
+        # Clear the PDF label and show upload area
+        self.pdf_label.clear()
+        self.pdf_label.hide()
+        self.upload_area.show()
         
         # Update the display
         self.pdf_label.update()
@@ -993,8 +1343,107 @@ class PDFProcessor(QWidget):
             self.pdf_label.update()
 
     def next_step(self):
-        # Emit signal instead of printing
-        self.next_clicked.emit()
+        if not self.pdf_path:
+            QMessageBox.warning(self, "Warning", "Please load a PDF file first.")
+            return
+
+        try:
+            # Check if this is a multi-page PDF
+            pdf_document = fitz.open(self.pdf_path)
+            total_pages = len(pdf_document)
+            pdf_document.close()
+
+            if total_pages > 1:
+                # Show dialog to ask user if they want to configure all pages
+                reply = QMessageBox.question(
+                    self,
+                    "Multi-page PDF Detected",
+                    f"This PDF has {total_pages} pages. Would you like to configure all pages?",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.Yes
+                )
+
+                if reply == QMessageBox.Yes:
+                    # Create multi-page section viewer
+                    from multi_page_section_viewer import MultiPageSectionViewer
+                    
+                    # Save current page's regions and column lines before proceeding
+                    if self.multi_page_mode:
+                        self.page_regions[self.current_page_index] = self.regions.copy()
+                        self.page_column_lines[self.current_page_index] = self.column_lines.copy()
+                    
+                    # Extract data from all pages
+                    all_pages_data = []
+                    for page_idx in range(total_pages):
+                        header_df, item_details_df, summary_df = self.extract_page_data(page_idx, 'page')
+                        all_pages_data.append({
+                            'header': header_df,
+                            'items': item_details_df,
+                            'summary': summary_df
+                        })
+                    
+                    # Create the viewer with all page data
+                    viewer = MultiPageSectionViewer(
+                        self.pdf_path,
+                        all_pages_data,
+                        self.page_regions if self.multi_page_mode else self.regions,
+                        self.page_column_lines if self.multi_page_mode else self.column_lines
+                    )
+                    
+                    # Add to stacked widget and show
+                    main_window = self.window()
+                    if hasattr(main_window, 'stacked_widget'):
+                        main_window.stacked_widget.addWidget(viewer)
+                        main_window.stacked_widget.setCurrentWidget(viewer)
+                else:
+                    # Use single page viewer
+                    from invoice_section_viewer import InvoiceSectionViewer
+                    
+                    # Extract data from first page (index 0)
+                    header_df, item_details_df, summary_df = self.extract_page_data(0, 'first_page')
+                    
+                    # Create the viewer with only current page data
+                    viewer = InvoiceSectionViewer(
+                        self.pdf_path,
+                        header_df,
+                        item_details_df,
+                        summary_df,
+                        self.regions,
+                        self.column_lines
+                    )
+                    
+                    # Add to stacked widget and show
+                    main_window = self.window()
+                    if hasattr(main_window, 'stacked_widget'):
+                        main_window.stacked_widget.addWidget(viewer)
+                        main_window.stacked_widget.setCurrentWidget(viewer)
+            else:
+                # Single page PDF - use regular viewer
+                from invoice_section_viewer import InvoiceSectionViewer
+                
+                # Extract data from the page (index 0)
+                header_df, item_details_df, summary_df = self.extract_page_data(0, 'first_page')
+                
+                # Create the viewer with single page data
+                viewer = InvoiceSectionViewer(
+                    self.pdf_path,
+                    header_df,
+                    item_details_df,
+                    summary_df,
+                    self.regions,
+                    self.column_lines
+                )
+                
+                # Add to stacked widget and show
+                main_window = self.window()
+                if hasattr(main_window, 'stacked_widget'):
+                    main_window.stacked_widget.addWidget(viewer)
+                    main_window.stacked_widget.setCurrentWidget(viewer)
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to create viewer: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
     def go_back(self):
         # Get the main window and go back one screen
@@ -1077,4 +1526,167 @@ class PDFProcessor(QWidget):
         
         # Force header selection when multi-table mode is toggled
         if self.multi_table_mode:
-            self.start_region_selection(RegionType.HEADER) 
+            self.start_region_selection(RegionType.HEADER)
+
+    def extract_page_data(self, page_index, page_type):
+        """Extract data from a specific page"""
+        if not self.pdf_document:
+            return None, None, None
+        
+        try:
+            # Get regions for current page
+            current_regions = self.page_regions.get(page_index, self.regions)
+            
+            # Create empty DataFrames with proper structure
+            header_df = pd.DataFrame(columns=['Field', 'Value'])
+            item_details_df = pd.DataFrame(columns=['Description', 'Quantity', 'Unit Price', 'Amount'])
+            summary_df = pd.DataFrame(columns=['Field', 'Value'])
+            
+            return header_df, item_details_df, summary_df
+        
+        except Exception as e:
+            print(f"Error extracting data from page {page_index}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            # Return empty DataFrames instead of None
+            return pd.DataFrame(columns=['Field', 'Value']), pd.DataFrame(columns=['Description', 'Quantity', 'Unit Price', 'Amount']), pd.DataFrame(columns=['Field', 'Value'])
+
+    def extract_region_data(self, page, regions):
+        """Extract data from a specific region of the page"""
+        if not regions:
+            return None
+            
+        try:
+            # For header and summary regions, we expect a list of rectangles
+            # For items region, we expect a single rectangle
+            if isinstance(regions, list):
+                # Return empty DataFrame for header/summary
+                return pd.DataFrame(columns=['Field', 'Value'])
+            else:
+                # Return empty DataFrame for items
+                return pd.DataFrame(columns=['Description', 'Quantity', 'Unit Price', 'Amount'])
+                
+        except Exception as e:
+            print(f"Error extracting region data: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    def extract_multi_page_invoice(self):
+        """Handle extraction of multi-page invoice"""
+        all_data = {
+            'header': None,
+            'items': [],
+            'summary': None
+        }
+        
+        # Extract first page
+        first_page_data = self.extract_page_data(0, 'first_page')
+        if first_page_data:
+            all_data['header'] = first_page_data.get('header')
+            all_data['items'].extend(first_page_data.get('items', []))
+        
+        # Extract middle pages
+        for page_num in range(1, len(self.pdf_document) - 1):
+            middle_page_data = self.extract_page_data(page_num, 'middle_page')
+            if middle_page_data:
+                all_data['items'].extend(middle_page_data.get('items', []))
+        
+        # Extract last page
+        last_page_data = self.extract_page_data(-1, 'last_page')
+        if last_page_data:
+            all_data['items'].extend(last_page_data.get('items', []))
+            all_data['summary'] = last_page_data.get('summary')
+        
+        return all_data 
+
+    def go_to_next_page(self):
+        if self.multi_page_mode and self.current_page_index < len(self.pdf_document) - 1:
+            # Save current regions and column lines before moving to next page
+            self.page_regions[self.current_page_index] = self.regions.copy()
+            self.page_column_lines[self.current_page_index] = self.column_lines.copy()
+            self.current_page_index += 1
+            self.display_current_page()
+
+    def go_to_previous_page(self):
+        if self.multi_page_mode and self.current_page_index > 0:
+            # Save current regions and column lines before moving to previous page
+            self.page_regions[self.current_page_index] = self.regions.copy()
+            self.page_column_lines[self.current_page_index] = self.column_lines.copy()
+            self.current_page_index -= 1
+            self.display_current_page()
+
+    def apply_to_remaining_pages(self):
+        """Apply current page's regions and column lines to all remaining pages"""
+        if not self.multi_page_mode or not self.pdf_document:
+            return
+            
+        # Get current page's regions and column lines
+        current_regions = self.regions.copy()
+        current_column_lines = self.column_lines.copy()
+        
+        # Calculate remaining pages
+        remaining_pages = len(self.pdf_document) - (self.current_page_index + 1)
+        
+        if remaining_pages <= 0:
+            QMessageBox.information(self, "No Remaining Pages", 
+                                  "There are no remaining pages to apply the template to.")
+            return
+            
+        # Ask for confirmation
+        reply = QMessageBox.question(self, "Apply to Remaining Pages",
+                                   f"This will apply the current page's template to {remaining_pages} remaining pages.\n"
+                                   "Are you sure you want to continue?",
+                                   QMessageBox.Yes | QMessageBox.No)
+        
+        if reply == QMessageBox.Yes:
+            try:
+                # Apply to all remaining pages
+                for page_num in range(self.current_page_index + 1, len(self.pdf_document)):
+                    # Create new regions dictionary for this page
+                    new_regions = {
+                        'header': [],
+                        'items': [],
+                        'summary': []
+                    }
+                    
+                    # Copy regions properly
+                    for region_type in ['header', 'items', 'summary']:
+                        for rect in current_regions[region_type]:
+                            # Create new QRect with the same coordinates
+                            new_rect = QRect(rect.x(), rect.y(), rect.width(), rect.height())
+                            new_regions[region_type].append(new_rect)
+                    
+                    # Store the new regions
+                    self.page_regions[page_num] = new_regions
+                    
+                    # Create new column lines dictionary for this page
+                    new_column_lines = {
+                        RegionType.HEADER: [],
+                        RegionType.ITEMS: [],
+                        RegionType.SUMMARY: []
+                    }
+                    
+                    # Copy column lines properly
+                    for region_type in [RegionType.HEADER, RegionType.ITEMS, RegionType.SUMMARY]:
+                        for start, end, rect_idx in current_column_lines[region_type]:
+                            # Create new QPoints with the same coordinates
+                            new_start = QPoint(start.x(), start.y())
+                            new_end = QPoint(end.x(), end.y())
+                            new_column_lines[region_type].append((new_start, new_end, rect_idx))
+                    
+                    # Store the new column lines
+                    self.page_column_lines[page_num] = new_column_lines
+                
+                QMessageBox.information(self, "Success", 
+                                      f"Template has been applied to {remaining_pages} remaining pages.")
+                
+                # Update status label
+                self.status_label.setText(f"Template applied to {remaining_pages} remaining pages")
+                
+            except Exception as e:
+                QMessageBox.critical(self, "Error", 
+                                   f"An error occurred while applying the template: {str(e)}")
+                print(f"Error applying template: {str(e)}")
+                import traceback
+                traceback.print_exc() 

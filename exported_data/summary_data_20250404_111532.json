@@ -1,0 +1,27 @@
+{
+  "smiles.pdf": {
+    "metadata": {
+      "filename": "smiles.pdf",
+      "page_count": 1,
+      "template_type": "single"
+    },
+    "summary": {
+      "table_0": {
+        "page_1": [
+          {
+            "0": "Total Approved Amount",
+            "1": "5276.98"
+          },
+          {
+            "0": "IGST",
+            "1": "954.98"
+          },
+          {
+            "0": "Total Amount Payable",
+            "1": "6231.96"
+          }
+        ]
+      }
+    }
+  }
+}
