@@ -1097,10 +1097,12 @@ class MultiPageSectionViewer(QWidget):
                 QMessageBox.information(
                     self,
                     "Template Saved",
-                    f"Multi-page template '{name}' has been saved successfully.",
+                    f"Multi-page template '{name}' has been saved successfully.Navigating to Template Manager...",
                     QMessageBox.Ok
                 )
-                print(f"Template saved successfully with ID: {template_id}")
+                print(f"Template saved successfully with ID: {template_id}")               
+                # Navigate to template manager screen
+                self.navigate_to_template_manager()
             else:
                 raise Exception("Failed to save template - no template ID returned")
             
@@ -1119,6 +1121,7 @@ class MultiPageSectionViewer(QWidget):
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec()
             return None
+        
 
     def get_region_color(self, region_type):
         colors = {

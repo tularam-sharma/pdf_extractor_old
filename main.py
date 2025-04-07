@@ -24,6 +24,7 @@ from role_based_ui import (
     RoleBasedPDFProcessor
 )
 from user_management_ui import UserManagementDialog, RoleManagementDialog
+from validation_screen import ValidationScreen
 import pandas as pd
 import fitz
 import pypdf_table_extraction
@@ -51,6 +52,7 @@ class PDFHarvest(QMainWindow):
         self.main_dashboard = MainDashboard(self.user_management)
         self.main_dashboard.show_pdf_processor.connect(self.show_pdf_processor)
         self.main_dashboard.show_template_manager.connect(self.show_template_manager)
+        self.main_dashboard.show_rules_manager.connect(self.show_rules_manager)
         self.main_dashboard.show_bulk_processor.connect(self.show_bulk_processor)
         self.main_dashboard.show_user_management.connect(self.show_user_management)
         # Connect login signals - use dashboard's integrated login panel
@@ -66,6 +68,7 @@ class PDFHarvest(QMainWindow):
         self.template_manager = None
         self.multi_page_processor = None
         self.invoice_viewer = None
+        self.rules_manager = None
         
         # Create and add PDF processor screen (now using role-based version)
         self.pdf_processor = RoleBasedPDFProcessor()
@@ -75,6 +78,11 @@ class PDFHarvest(QMainWindow):
         # Create and add template manager screen
         self.template_manager = TemplateManager(self.pdf_processor)
         self.stacked_widget.addWidget(self.template_manager)
+        
+        # Create and add rules manager screen
+        self.rules_manager = ValidationScreen(is_rules_manager=True)
+        self.rules_manager.back_requested.connect(self.handle_rules_manager_back)
+        self.stacked_widget.addWidget(self.rules_manager)
         
         # Template manager signals
         self.template_manager.go_back.connect(lambda: self.stacked_widget.setCurrentWidget(self.main_dashboard))
@@ -959,6 +967,41 @@ class PDFHarvest(QMainWindow):
             "A PDF invoice data extraction tool with visual selection and mapping capabilities.\n\n"
             "© 2023 PDF Harvest Team"
             )
+
+    def show_rules_manager(self):
+        """Show the rules manager screen."""
+        # Check if user has permission
+        if (not self.user_management.get_current_user() or 
+            not self.user_management.has_permission("rules_management")):
+            QMessageBox.warning(
+                self,
+                "Permission Denied",
+                "You do not have permission to access rules management.\n\n"
+                "Please log in with a developer account to access this feature."
+            )
+            return
+        
+        # Hide all widgets in the stacked widget to prevent overlapping
+        for i in range(self.stacked_widget.count()):
+            widget = self.stacked_widget.widget(i)
+            if widget:
+                widget.setVisible(False)
+        
+        # Show the rules manager
+        self.rules_manager.setVisible(True)
+        self.stacked_widget.setCurrentWidget(self.rules_manager)
+    
+    def handle_rules_manager_back(self):
+        """Handle the back request from the rules manager."""
+        # Hide all widgets first
+        for i in range(self.stacked_widget.count()):
+            widget = self.stacked_widget.widget(i)
+            if widget:
+                widget.setVisible(False)
+                
+        # Show dashboard and make it current
+        self.main_dashboard.setVisible(True)
+        self.stacked_widget.setCurrentWidget(self.main_dashboard)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

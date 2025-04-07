@@ -36,7 +36,6 @@ from PySide6.QtCore import Qt, Signal, QObject, QRect, QTimer
 from PySide6.QtGui import QColor, QFont, QIcon
 import pandas as pd
 import time
-from validation_screen import ValidationScreen
 
 
 class NoFrameStyle(QProxyStyle):
@@ -778,31 +777,9 @@ class BulkProcessor(QWidget):
             }}
         """)
         
-        validate_btn = QPushButton("Validate Data", self)
-        validate_btn.clicked.connect(self.open_validation_screen)
-        validate_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {self.theme['tertiary']};
-                color: white;
-                padding: 8px 16px;
-                border-radius: 6px;
-                font-weight: bold;
-                min-height: 36px;
-            }}
-            QPushButton:hover {{
-                background-color: #7C3AED;
-            }}
-            QPushButton:pressed {{
-                background-color: #6D28D9;
-                padding-top: 9px;
-                padding-left: 17px;
-            }}
-        """)
-        
         export_buttons_layout.addWidget(export_header_btn)
         export_buttons_layout.addWidget(export_items_btn)
         export_buttons_layout.addWidget(export_summary_btn)
-        export_buttons_layout.addWidget(validate_btn)
         export_layout.addLayout(export_buttons_layout)
         
         results_layout.addLayout(export_layout)
@@ -2619,65 +2596,3 @@ class BulkProcessor(QWidget):
         if self.template_combo.count() == 0:
             return None
         return self.template_combo.currentData()
-    
-    def open_validation_screen(self):
-        """Open the validation screen with the processed data"""
-        if not self.processed_data:
-            QMessageBox.warning(self, "Warning", "No data to validate. Please process files first.")
-            return
-            
-        # Create validation screen
-        self.validation_screen = ValidationScreen(self)
-        self.validation_screen.back_requested.connect(self.close_validation_screen)
-        
-        # Convert processed data to DataFrame
-        data_frames = []
-        for pdf_path, data in self.processed_data.items():
-            # Combine header, items, and summary data
-            combined_data = {}
-            
-            # Add header data
-            if "header" in data and data["header"]:
-                for table in data["header"]:
-                    if not table.empty:
-                        for col in table.columns:
-                            combined_data[f"header_{col}"] = table[col].iloc[0] if len(table) > 0 else ""
-            
-            # Add items data
-            if "items" in data and data["items"]:
-                for table in data["items"]:
-                    if not table.empty:
-                        for col in table.columns:
-                            combined_data[f"items_{col}"] = table[col].iloc[0] if len(table) > 0 else ""
-            
-            # Add summary data
-            if "summary" in data and data["summary"]:
-                for table in data["summary"]:
-                    if not table.empty:
-                        for col in table.columns:
-                            combined_data[f"summary_{col}"] = table[col].iloc[0] if len(table) > 0 else ""
-            
-            # Add metadata
-            combined_data["pdf_file"] = os.path.basename(pdf_path)
-            combined_data["template_type"] = data.get("template_type", "single")
-            combined_data["pdf_page_count"] = data.get("pdf_page_count", 1)
-            
-            data_frames.append(pd.DataFrame([combined_data]))
-        
-        # Combine all data frames
-        if data_frames:
-            combined_df = pd.concat(data_frames, ignore_index=True)
-            self.validation_screen.set_data(combined_df)
-            
-            # Load any saved rules
-            self.validation_screen.load_rules()
-            
-            # Show validation screen
-            self.validation_screen.show()
-            self.hide()
-    
-    def close_validation_screen(self):
-        """Close the validation screen and return to bulk processor"""
-        if hasattr(self, 'validation_screen'):
-            self.validation_screen.close()
-        self.show()

@@ -6,45 +6,35 @@ import sqlite3
 from datetime import datetime
 import fitz  # PyMuPDF
 import pypdf_table_extraction
-from PySide6.QtWidgets import (
-    QApplication,
+import time
+from PySide6.QtWidgets import (QApplication,
     QMainWindow,
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
-    QLabel,
     QPushButton,
-    QListWidget,
-    QTableWidget,
-    QTableWidgetItem,
-    QProgressBar,
+    QLabel,
+    QStackedWidget,
     QFileDialog,
     QMessageBox,
-    QComboBox,
-    QStackedWidget,
+    QScrollArea,
     QFrame,
-    QHeaderView,
-    QGroupBox,
     QSplitter,
     QGridLayout,
-    QSizePolicy,
-    QListView,
-    QStyle,
-    QProxyStyle,
+    QLineEdit,
+    QComboBox,
+    QListWidget,
+    QProgressBar,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
+    QGroupBox,
+    QTimer,
 )
-from PySide6.QtCore import Qt, Signal, QObject, QRect, QTimer
+from PySide6.QtCore import Qt, Signal, QObject, QRect
 from PySide6.QtGui import QColor, QFont, QIcon
 import pandas as pd
-import time
-from validation_screen import ValidationScreen
 
-
-class NoFrameStyle(QProxyStyle):
-    def styleHint(self, hint, option=None, widget=None, returnData=None):
-        if hint == QStyle.SH_ComboBox_Popup:
-            return 0
-        return super().styleHint(hint, option, widget, returnData)
-        
 
 class BulkProcessor(QWidget):
     # Define signals
@@ -54,12 +44,16 @@ class BulkProcessor(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent = parent
+        self.setWindowTitle("Bulk Invoice Processing")
+        
+        # Initialize variables
         self.pdf_files = []
         self.processed_data = {}
+        self.stop_processing = False  # Flag to control processing
+        self.processing_start_time = None  # To track processing time
         
-        # Initialize stop flag for processing
-        self.should_stop = False
-        self.start_time = None
+        # Initialize UI
+        self.init_ui()
         
         # Define AI theme colors
         self.theme = {
@@ -205,67 +199,32 @@ class BulkProcessor(QWidget):
         template_input_layout = QHBoxLayout()
         self.template_combo = QComboBox(self)
         self.template_combo.setMinimumHeight(36)
-        
-        # Apply custom style to remove frame
-        self.template_combo.setStyle(NoFrameStyle())
-        
-        # Create and set a custom list view for the combo box
-        list_view = QListView()
-        list_view.setFrameShape(QListView.NoFrame)
-        self.template_combo.setView(list_view)
-        
-        # Styled dropdown with proper border
-        self.template_combo.setStyleSheet("""
-            QComboBox {
-                border: 1px solid #E5E7EB;
+        # Fix dropdown styling
+        self.template_combo.setStyleSheet(f"""
+            QComboBox {{
+                border: 1px solid {self.theme['border']};
                 border-radius: 6px;
                 padding: 8px 12px;
                 background-color: white;
                 min-height: 36px;
-                color: #1F2937;
+                color: {self.theme['text']};
                 font-size: 14px;
-            }
-            
-            QComboBox:hover, QComboBox:focus {
-                border: 1px solid #6366F1;
-            }
-            
-            QComboBox::drop-down {
-                border: none;
-                width: 20px;
-            }
-            
-            QComboBox::down-arrow {
-                image: none;
-            }
-            
-            QComboBox QAbstractItemView {
-                border: 1px solid #E5E7EB;
-                border-radius: 4px;
-                padding: 4px;
+            }}
+            QComboBox::drop-down {{
+                subcontrol-origin: padding;
+                subcontrol-position: center right;
+                width: 24px;
+                border-left: none;
+                border-top-right-radius: 6px;
+                border-bottom-right-radius: 6px;
+            }}
+            QComboBox QAbstractItemView {{
+                border: 1px solid {self.theme['border']};
+                border-radius: 6px;
                 background-color: white;
-                outline: none;
-            }
-            
-            QComboBox QAbstractItemView::item {
-                border-bottom: 1px solid #F3F4F6;
-                padding: 8px 12px;
-                min-height: 30px;
-                color: #1F2937;
-            }
-            
-            QComboBox QAbstractItemView::item:last-child {
-                border-bottom: none;
-            }
-            
-            QComboBox QAbstractItemView::item:hover {
-                background-color: #F3F4F6;
-            }
-            
-            QComboBox QAbstractItemView::item:selected {
-                background-color: #EEF2FF;
-                color: #4F46E5;
-            }
+                selection-background-color: {self.theme['primary']};
+                selection-color: white;
+            }}
         """)
         
         # Add refresh button
@@ -308,21 +267,19 @@ class BulkProcessor(QWidget):
         
         # Status and Progress
         status_layout = QHBoxLayout()
-        # Status indicator without any background or border
+        # Status indicator
         self.status_label = QLabel("Ready", self)
-        self.status_label.setStyleSheet("color: #00B8A9;")
+        self.status_label.setStyleSheet(f"""
+            padding: 4px 8px;
+            border-radius: 4px;
+            background-color: {self.theme['secondary'] + '20'};
+            color: {self.theme['secondary']};
+        """)
         status_layout.addWidget(self.status_label)
-        
-        # Processing time label - simple text only
-        self.processing_time_label = QLabel("", self)
-        self.processing_time_label.setStyleSheet("color: #1F2937;")
-        status_layout.addWidget(self.processing_time_label)
-        
-        # Add stretch to push labels to the left
         status_layout.addStretch()
         template_layout.addLayout(status_layout)
         
-        # Progress bar and stop button in a layout
+        # Progress bar layout with stop button
         progress_layout = QHBoxLayout()
         
         # Progress bar with modern style
@@ -341,31 +298,46 @@ class BulkProcessor(QWidget):
                 border-radius: 4px;
             }}
         """)
-        progress_layout.addWidget(self.progress_bar, 1)
         
-        # Stop button
-        self.stop_button = QPushButton("Stop", self)
-        self.stop_button.clicked.connect(self.stop_processing)
-        self.stop_button.setStyleSheet(f"""
+        # Stop processing button
+        self.stop_btn = QPushButton("Stop", self)
+        self.stop_btn.clicked.connect(self.stop_processing_handler)
+        self.stop_btn.setEnabled(False)  # Disabled by default
+        self.stop_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {self.theme['danger']};
                 color: white;
                 padding: 4px 12px;
                 border-radius: 4px;
                 font-weight: bold;
-                min-height: 24px;
             }}
             QPushButton:hover {{
-                background-color: {self.theme['danger'] + 'CC'};
+                background-color: {self.theme['danger'] + 'E0'};
             }}
             QPushButton:pressed {{
-                background-color: {self.theme['danger'] + 'AA'};
+                background-color: {self.theme['danger'] + 'C0'};
+            }}
+            QPushButton:disabled {{
+                background-color: {self.theme['border']};
+                color: {self.theme['text'] + '80'};
             }}
         """)
-        self.stop_button.setVisible(False)
-        progress_layout.addWidget(self.stop_button)
         
+        # Add processing time label
+        self.time_label = QLabel("Processing time: 0s", self)
+        self.time_label.setStyleSheet(f"""
+            color: {self.theme['text'] + '80'};
+            font-size: 12px;
+        """)
+        self.time_label.setAlignment(Qt.AlignRight)
+        
+        # Add widgets to progress layout
+        progress_layout.addWidget(self.progress_bar, 1)  # Give progress bar more space
+        progress_layout.addWidget(self.stop_btn, 0)  # Fixed width for stop button
+        
+        # Add progress layout to template layout
         template_layout.addLayout(progress_layout)
+        template_layout.addWidget(self.time_label)
         
         left_layout.addWidget(template_card)
         
@@ -496,6 +468,9 @@ class BulkProcessor(QWidget):
                 font-weight: bold;
                 min-height: 36px;
             }}
+            QPushButton:hover {{
+                background-color: {self.theme['dark'] + 'E0'};
+            }}
             QPushButton:pressed {{
                 background-color: {self.theme['dark'] + 'C0'};
                 padding-top: 9px;
@@ -601,7 +576,7 @@ class BulkProcessor(QWidget):
         summary_layout.addWidget(failed_label, 0, 4)
         summary_layout.addWidget(self.failed_count, 0, 5)
         summary_layout.addWidget(total_rows_label, 1, 0, 1, 2)
-        summary_layout.addWidget(self.total_rows_count, 1, 2, 1, 1)
+        summary_layout.addWidget(self.total_rows_count, 1, 2, 1, 4)
         
         results_layout.addWidget(summary_frame)
         
@@ -621,89 +596,51 @@ class BulkProcessor(QWidget):
 
         # Set up horizontal header with better styling
         header = self.results_table.horizontalHeader()
-        
-        # Configure header behavior
-        header.setVisible(True)
-        header.setHighlightSections(False)
-        header.setStretchLastSection(False)
-        header.setSectionsMovable(False)
-        
-        # Set column widths and resize modes
-        column_widths = [250, 150, 100, 150, 150, 150]
-        for i, width in enumerate(column_widths):
-            self.results_table.setColumnWidth(i, width)
-            header.setSectionResizeMode(i, QHeaderView.Fixed)  # Fixed width to prevent disappearing
-        
-        # Update table stylesheet with more prominent header styling and proper alignment
+        header.setSectionResizeMode(0, QHeaderView.Stretch)  # File name stretches
+        for i in range(1, 6):
+            header.setSectionResizeMode(i, QHeaderView.ResizeToContents)
+
+        # Enable alternating row colors for better readability
+        self.results_table.setAlternatingRowColors(True)
+        self.results_table.setMinimumHeight(300)
         self.results_table.setStyleSheet(f"""
             QTableWidget {{
                 border: 1px solid {self.theme['border']};
                 border-radius: 6px;
                 background-color: white;
-                gridline-color: {self.theme['border']};
+                gridline-color: {self.theme['border'] + '50'};
+                alternate-background-color: {self.theme['light'] + '50'};
             }}
-            
-            QHeaderView::section {{
-                background-color: white;
-                color: {self.theme['text']};
-                font-weight: bold;
-                font-size: 13px;
-                padding: 8px;
-                border: 1px solid {self.theme['border']};
-                min-height: 30px;
-                max-height: 30px;
-            }}
-            
-            QHeaderView::section:horizontal {{
-                border-top: 1px solid {self.theme['border']};
-                text-align: left;
-                padding-left: 12px;
-            }}
-            
             QTableWidget::item {{
                 padding: 8px;
-                border-bottom: 1px solid {self.theme['border']};
-                text-align: left;
-                padding-left: 12px;
+                border-bottom: 1px solid {self.theme['border'] + '20'};
             }}
-            
             QTableWidget::item:selected {{
-                background-color: {self.theme['primary'] + '15'};
+                background-color: {self.theme['primary'] + '30'};
                 color: {self.theme['text']};
             }}
-        """)
-        
-        # Additional header settings
-        header.setMinimumHeight(40)
-        header.setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        
-        # Enable features for better usability
-        self.results_table.setAlternatingRowColors(False)  # Disable alternating row colors
-        self.results_table.setShowGrid(True)
-        self.results_table.setGridStyle(Qt.SolidLine)
-        self.results_table.verticalHeader().setVisible(False)
-        self.results_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.results_table.setSelectionMode(QTableWidget.SingleSelection)
-        self.results_table.setMinimumHeight(300)
-        
-        # Set table size policy to expand properly
-        self.results_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        
-        # Ensure the table is properly contained in a frame
-        table_frame = QFrame()
-        table_frame.setStyleSheet(f"""
-            QFrame {{
-                border: 1px solid {self.theme['border']};
-                border-radius: 6px;
-                background-color: white;
-                padding: 1px;
+            QHeaderView::section {{
+                background-color: {self.theme['primary']};
+                color: white;
+                padding: 10px 8px;
+                font-weight: bold;
+                border: none;
+                border-right: 1px solid white;
+            }}
+            QTableWidget::item[status="success"] {{
+                color: {self.theme['secondary']};
+                font-weight: bold;
+            }}
+            QTableWidget::item[status="partial"] {{
+                color: {self.theme['warning']};
+                font-weight: bold;
+            }}
+            QTableWidget::item[status="failed"] {{
+                color: {self.theme['danger']};
+                font-weight: bold;
             }}
         """)
-        table_layout = QVBoxLayout(table_frame)
-        table_layout.setContentsMargins(1, 1, 1, 1)
-        table_layout.addWidget(self.results_table)
-        
-        results_layout.addWidget(table_frame)
+        results_layout.addWidget(self.results_table)
         
         # Export section
         export_layout = QVBoxLayout()
@@ -778,31 +715,9 @@ class BulkProcessor(QWidget):
             }}
         """)
         
-        validate_btn = QPushButton("Validate Data", self)
-        validate_btn.clicked.connect(self.open_validation_screen)
-        validate_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {self.theme['tertiary']};
-                color: white;
-                padding: 8px 16px;
-                border-radius: 6px;
-                font-weight: bold;
-                min-height: 36px;
-            }}
-            QPushButton:hover {{
-                background-color: #7C3AED;
-            }}
-            QPushButton:pressed {{
-                background-color: #6D28D9;
-                padding-top: 9px;
-                padding-left: 17px;
-            }}
-        """)
-        
         export_buttons_layout.addWidget(export_header_btn)
         export_buttons_layout.addWidget(export_items_btn)
         export_buttons_layout.addWidget(export_summary_btn)
-        export_buttons_layout.addWidget(validate_btn)
         export_layout.addLayout(export_buttons_layout)
         
         results_layout.addLayout(export_layout)
@@ -940,36 +855,61 @@ class BulkProcessor(QWidget):
             self.multi_page_label.setStyleSheet("color: red;")
     
     def process_files(self):
-        """Process selected PDF files with the selected template"""
-        # Validate files and template selection
+        """Process all selected PDF files using the database template"""
         if not self.pdf_files:
-            QMessageBox.warning(self, "Warning", "Please add PDF files first")
+            QMessageBox.warning(self, "Warning", "Please select PDF files to process")
             return
-
-        template_id = self.get_selected_template_id()
-        if not template_id:
-            QMessageBox.warning(self, "Warning", "Please select a template")
+            
+        if self.template_combo.count() == 0:
+            QMessageBox.warning(
+                self,
+                "Warning",
+                "No templates available. Please create a template first.",
+            )
             return
-
-        # Reset counters and displays
-        self.status_label.setText("Processing files...")
+            
+        # Start time tracking
+        self.processing_start_time = time.time()
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_processing_time)
+        self.timer.start(1000)  # Update every second
+            
+        # Reset stop processing flag
+        self.stop_processing = False
+        self.stop_btn.setEnabled(True)
+            
+        # Get selected template ID
+        template_id = self.template_combo.currentData()
+        template_name = self.template_combo.currentText()
+        print(f"\n{'*'*100}")
+        print(f"STARTING BULK PROCESSING")
+        print(f"Selected template ID: {template_id}, Name: {template_name}")
+        print(f"{'*'*100}")
+        
+        # Reset results before processing
         self.results_table.setRowCount(0)
+        self.results_table.setColumnCount(6)
+        self.results_table.setHorizontalHeaderLabels(
+            [
+                "File Name",
+                "Status",
+                "PDF Pages",
+                "Header Data Rows",
+                "Item Rows",
+                "Summary Rows",  # Add summary column
+            ]
+        )
+        self.processed_data = {}
+        
+        # Reset summary counters
         self.processed_count.setText("0")
         self.success_count.setText("0")
         self.failed_count.setText("0")
         self.total_rows_count.setText("0")
+        
+        # Set up progress bar
         self.progress_bar.setMaximum(len(self.pdf_files))
         self.progress_bar.setValue(0)
-        
-        # Reset stop flag and show stop button
-        self.should_stop = False
-        self.stop_button.setVisible(True)
-        
-        # Start the timer
-        self.start_time = time.time()
-        self.processing_time_timer = QTimer(self)
-        self.processing_time_timer.timeout.connect(self.update_processing_time)
-        self.processing_time_timer.start(1000)  # Update every second
 
         try:
             # Initialize counters for summary statistics
@@ -980,8 +920,8 @@ class BulkProcessor(QWidget):
             
             # Process each PDF file
             for index, pdf_path in enumerate(self.pdf_files):
-                # Check if processing should stop
-                if self.should_stop:
+                # Check if processing should be stopped
+                if self.stop_processing:
                     self.status_label.setText("Processing stopped by user")
                     break
                     
@@ -1011,7 +951,7 @@ class BulkProcessor(QWidget):
                         # Get the overall extraction status
                         extraction_status = results.get("extraction_status", {})
                         overall_status = extraction_status.get("overall", "failed")
-                        
+                                    
                         # Store the results with correct page count and template type
                         self.processed_data[pdf_path] = {
                             "pdf_page_count": actual_page_count,  # Use actual page count from PDF
@@ -1111,6 +1051,7 @@ class BulkProcessor(QWidget):
                         file_total_rows = header_count + item_count + summary_count
                         total_rows += file_total_rows
                         self.total_rows_count.setText(str(total_rows))
+                        
                     else:
                         # Add error to results table
                         row = self.results_table.rowCount()
@@ -1171,18 +1112,9 @@ class BulkProcessor(QWidget):
                     self.results_table.setItem(row, 4, QTableWidgetItem("0"))
                     self.results_table.setItem(row, 5, QTableWidgetItem("0"))
 
-                    # Update progress
+                # Update progress
                 self.progress_bar.setValue(index + 1)
                 QApplication.processEvents()  # Keep UI responsive
-                
-            # Final update of processing time
-            self.update_processing_time(is_final=True)
-            
-            # Hide stop button when done
-            self.stop_button.setVisible(False)
-            
-            # Stop the processing timer
-            self.processing_time_timer.stop()
 
             # Then update the color formatting for status items
             for row in range(self.results_table.rowCount()):
@@ -1202,8 +1134,29 @@ class BulkProcessor(QWidget):
             # Then modify the processing completion message and status labels to provide clearer information
             # Update status
             total_files = len(self.pdf_files)
-            if success_count == total_files:
-                self.status_label.setText("Processing complete: All files processed successfully!")
+            
+            # Stop the timer and record processing time
+            self.timer.stop()
+            processing_time = time.time() - self.processing_start_time
+            time_str = self.format_time(processing_time)
+            self.time_label.setText(f"Processing time: {time_str}")
+            
+            # Reset stop button
+            self.stop_btn.setEnabled(False)
+            
+            # Mark processing complete
+            if self.stop_processing:
+                self.status_label.setText(f"Processing stopped: {processed_count}/{total_files} files processed")
+                self.status_label.setStyleSheet(f"""
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    background-color: {self.theme['warning'] + '20'};
+                    color: {self.theme['warning']};
+                    font-weight: bold;
+                """)
+                QMessageBox.warning(self, "Processing Stopped", f"Processing stopped by user.\n{processed_count} out of {total_files} files were processed.")
+            elif success_count == total_files:
+                self.status_label.setText(f"Processing complete: All files processed successfully! ({time_str})")
                 self.status_label.setStyleSheet(f"""
                     padding: 4px 8px;
                     border-radius: 4px;
@@ -1211,7 +1164,7 @@ class BulkProcessor(QWidget):
                     color: {self.theme['secondary']};
                     font-weight: bold;
                 """)
-                QMessageBox.information(self, "Success", f"All {total_files} files have been processed successfully.\nTotal time: {self.processing_time_label.text().replace('Total Time: ', '')}")
+                QMessageBox.information(self, "Success", f"All {total_files} files have been processed successfully in {time_str}.")
             elif success_count > 0:
                 self.status_label.setText(f"Processing complete: {success_count}/{total_files} files processed successfully")
                 self.status_label.setStyleSheet(f"""
@@ -1221,7 +1174,7 @@ class BulkProcessor(QWidget):
                     color: {self.theme['warning']};
                     font-weight: bold;
                 """)
-                QMessageBox.warning(self, "Partial Success", f"{success_count} out of {total_files} files processed successfully.\n{failed_count} files failed.\nTotal time: {self.processing_time_label.text().replace('Total Time: ', '')}")
+                QMessageBox.warning(self, "Partial Success", f"{success_count} out of {total_files} files processed successfully.\n{failed_count} files failed.")
             else:
                 self.status_label.setText("Processing complete: All files failed")
                 self.status_label.setStyleSheet(f"""
@@ -1231,24 +1184,14 @@ class BulkProcessor(QWidget):
                     color: {self.theme['danger']};
                     font-weight: bold;
                 """)
-                QMessageBox.critical(self, "Processing Failed", f"All {total_files} files failed to process. Please check logs for details.\nTotal time: {self.processing_time_label.text().replace('Total Time: ', '')}")
+                QMessageBox.critical(self, "Processing Failed", f"All {total_files} files failed to process. Please check logs for details.")
                     
         except Exception as e:
-            # Final update of processing time
-            self.update_processing_time(is_final=True)
-            
-            # Hide stop button when done
-            self.stop_button.setVisible(False)
-            
-            # Stop the processing timer
-            if hasattr(self, 'processing_time_timer'):
-                self.processing_time_timer.stop()
-                
             print(f"Error in process_files: {str(e)}")
             import traceback
 
             traceback.print_exc()
-            QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}\nTotal time: {self.processing_time_label.text().replace('Total Time: ', '')}")
+            QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
             self.status_label.setText("Error occurred during processing")
     
     def add_files(self):
@@ -1520,20 +1463,6 @@ class BulkProcessor(QWidget):
         # Reset status label
         self.status_label.setText("Ready")
         
-        # Reset processing time label
-        self.processing_time_label.setText("")
-        self.start_time = None
-        
-        # Stop any running timer
-        if hasattr(self, 'processing_time_timer') and self.processing_time_timer.isActive():
-            self.processing_time_timer.stop()
-        
-        # Reset extraction statistics summary values
-        self.processed_count.setText("0")
-        self.success_count.setText("0")
-        self.failed_count.setText("0")
-        self.total_rows_count.setText("0")
-        
         # Reset template selection if needed
         if self.template_combo.count() > 0:
             self.template_combo.setCurrentIndex(0)
@@ -1639,13 +1568,13 @@ class BulkProcessor(QWidget):
         return df
 
     def extract_invoice_tables(self, pdf_path, template_id):
+        """Extract tables from the PDF file using a specified template"""
         try:
-            print("\n" + "=" * 80)
-            print(f"STEP 1: DATABASE CONNECTION AND TEMPLATE RETRIEVAL")
-            print("=" * 80)
-
+            # Check if processing should be stopped
+            if self.stop_processing:
+                return None
+                
             # Connect to database
-            print("Connecting to database: 'invoice_templates.db'")
             conn = sqlite3.connect("invoice_templates.db")
             cursor = conn.cursor()
 
@@ -1688,20 +1617,14 @@ class BulkProcessor(QWidget):
 
             # Close database connection
             conn.close()
-
-            print("\n" + "=" * 80)
-            print(f"STEP 2: PDF DOCUMENT LOADING")
-            print("=" * 80)
+            
+            # Check again if processing should be stopped
+            if self.stop_processing:
+                return None
 
             # Load the PDF document
-            print(f"Loading PDF document: {pdf_path}")
             pdf_document = fitz.open(pdf_path)
             pdf_page_count = len(pdf_document)
-            print(f"✓ PDF document loaded successfully with {pdf_page_count} pages")
-
-            print("\n" + "=" * 80)
-            print(f"STEP 3: TABLE EXTRACTION")
-            print("=" * 80)
 
             # Initialize results dictionary with extraction statuses
             results = {
@@ -1719,6 +1642,34 @@ class BulkProcessor(QWidget):
             # Get config parameters
             config = template_data.get("config", {})
 
+            # Pre-compile regex patterns for all sections for better performance
+            compiled_regex_patterns = {}
+            for section in ["header", "items", "summary"]:
+                compiled_regex_patterns[section] = {}
+                # Check global regex patterns
+                if "regex_patterns" in config and section in config["regex_patterns"]:
+                    section_regex = config["regex_patterns"][section]
+                    for pattern_type in ["start", "end", "skip"]:
+                        if pattern_type in section_regex and section_regex[pattern_type]:
+                            try:
+                                compiled_regex_patterns[section][pattern_type] = re.compile(
+                                    section_regex[pattern_type], re.IGNORECASE
+                                )
+                            except re.error:
+                                pass
+
+                # Check section-specific regex patterns
+                if section in config and "regex_patterns" in config[section]:
+                    section_regex = config[section]["regex_patterns"]
+                    for pattern_type in ["start", "end", "skip"]:
+                        if pattern_type in section_regex and section_regex[pattern_type]:
+                            try:
+                                compiled_regex_patterns[section][pattern_type] = re.compile(
+                                    section_regex[pattern_type], re.IGNORECASE
+                                )
+                            except re.error:
+                                pass
+
             # Get middle page settings for multi-page templates
             use_middle_page = False
             fixed_page_count = False
@@ -1730,10 +1681,6 @@ class BulkProcessor(QWidget):
 
                 if "fixed_page_count" in config:
                     fixed_page_count = config.get("fixed_page_count", False)
-
-                print(f"Multi-page template settings:")
-                print(f"  Use middle page: {use_middle_page}")
-                print(f"  Fixed page count: {fixed_page_count}")
 
             # Determine which pages to process
             pages_to_process = []
@@ -1753,9 +1700,7 @@ class BulkProcessor(QWidget):
                     # Special handling for middle page templates
                     if pdf_page_count == 1:
                         # If only one page, apply both first and last page regions
-                        pages_to_process = [
-                            0
-                        ]  # Process the single page as both first and last
+                        pages_to_process = [0]  # Process the single page as both first and last
                     else:
                         # Process first, middle (if exists), and last pages
                         pages_to_process = [0]  # First page
@@ -1773,16 +1718,25 @@ class BulkProcessor(QWidget):
                         range(min(template_page_count, pdf_page_count))
                     )
 
-            print(f"Pages to process: {[p+1 for p in pages_to_process]}")
-
-            # Process each selected page
-            for page_index in pages_to_process:
-                print(f"\nProcessing page {page_index + 1}/{pdf_page_count}")
-
+            # Define a processing function for concurrent execution
+            def process_page(page_index):
+                # Check if processing should be stopped
+                if self.stop_processing:
+                    return None
+                    
+                page_results = {
+                    "header_tables": [],
+                    "items_tables": [],
+                    "summary_tables": [],
+                    "page_index": page_index,
+                    "extraction_status": {
+                        "header": "not_processed",
+                        "items": "not_processed",
+                        "summary": "not_processed"
+                    }
+                }
+                
                 try:
-                    # Get the current page
-                    page = pdf_document[page_index]
-
                     # Get regions and column lines for current page
                     current_regions = {}
                     current_column_lines = {}
@@ -1799,24 +1753,18 @@ class BulkProcessor(QWidget):
                                 if page_index < len(page_column_lines):
                                     current_column_lines = page_column_lines[page_index]
                             else:
-                                print(
-                                    f"Warning: No template data for page {page_index + 1}"
-                                )
-                                continue
+                                return page_results  # Skip if no template data
 
                         elif use_middle_page:
                             # For middle page templates, select regions based on position
                             if pdf_page_count == 1:
-                                # For single page PDFs with middle page template,
-                                # combine first and last page regions
+                                # For single page PDFs with middle page template, combine first and last page regions
                                 if len(page_regions) >= 1:
                                     # Add all regions from first page
                                     first_page_regions = page_regions[0]
                                     for section in ["header", "items", "summary"]:
                                         if section in first_page_regions:
-                                            current_regions[section] = (
-                                                first_page_regions.get(section, [])
-                                            )
+                                            current_regions[section] = first_page_regions.get(section, [])
 
                                 if len(page_regions) >= 3:
                                     # Add any additional regions from last page
@@ -1825,18 +1773,14 @@ class BulkProcessor(QWidget):
                                         if section in last_page_regions:
                                             if section not in current_regions:
                                                 current_regions[section] = []
-                                            current_regions[section].extend(
-                                                last_page_regions.get(section, [])
-                                            )
+                                            current_regions[section].extend(last_page_regions.get(section, []))
 
                                 # Combine column lines similarly
                                 if len(page_column_lines) >= 1:
                                     first_page_cols = page_column_lines[0]
                                     for section in ["header", "items", "summary"]:
                                         if section in first_page_cols:
-                                            current_column_lines[section] = (
-                                                first_page_cols.get(section, [])
-                                            )
+                                            current_column_lines[section] = first_page_cols.get(section, [])
 
                                 if len(page_column_lines) >= 3:
                                     last_page_cols = page_column_lines[2]
@@ -1844,9 +1788,7 @@ class BulkProcessor(QWidget):
                                         if section in last_page_cols:
                                             if section not in current_column_lines:
                                                 current_column_lines[section] = []
-                                            current_column_lines[section].extend(
-                                                last_page_cols.get(section, [])
-                                            )
+                                            current_column_lines[section].extend(last_page_cols.get(section, []))
                             else:
                                 # Multi-page PDF with middle page template
                                 if page_index == 0 and len(page_regions) >= 1:
@@ -1872,66 +1814,39 @@ class BulkProcessor(QWidget):
                                 if page_index < len(page_column_lines):
                                     current_column_lines = page_column_lines[page_index]
                             else:
-                                print(
-                                    f"Warning: No template data for page {page_index + 1}"
-                                )
-                                continue
+                                return page_results  # Skip if no template data
 
                     else:
                         # For single page templates
                         current_regions = template_data.get("regions", {})
                         current_column_lines = template_data.get("column_lines", {})
                         
-                        # Debug column lines for single page templates
-                        print(f"\nSingle-page template column lines:")
-                        for section, lines in current_column_lines.items():
-                            print(f"  {section}: {len(lines)} column lines")
-                            if lines and len(lines) > 0:
-                                print(f"    First column line format: {type(lines[0])}")
-                                print(f"    Sample: {lines[0]}")
-                        
                         # Verify column_lines structure - it should be a dict with sections as keys
                         if not isinstance(current_column_lines, dict):
-                            print(f"  WARNING: column_lines is not a dict: {type(current_column_lines)}")
                             # Try to fix it - common issue is an array with a single entry
                             if isinstance(current_column_lines, list) and len(current_column_lines) > 0:
-                                print(f"  Attempting to fix column_lines format (found list with {len(current_column_lines)} entries)")
                                 # Use the first item if it's a dict
                                 if isinstance(current_column_lines[0], dict):
                                     current_column_lines = current_column_lines[0]
-                                    print(f"  Fixed column_lines to use first entry: {type(current_column_lines)}")
-
-                    # Debug the regions we're using
-                    print(f"Using regions format: {type(current_regions)}")
-                    if current_regions:
-                        for section, regions in current_regions.items():
-                            print(f"  {section}: {len(regions)} region(s)")
-                            if regions:
-                                print(f"    First region type: {type(regions[0])}")
 
                     # Process each section (header, items, summary)
                     for section in ["header", "items", "summary"]:
+                        # Check if processing should be stopped
+                        if self.stop_processing:
+                            return None
+                            
                         if section in current_regions and current_regions[section]:
                             section_regions = current_regions[section]
                             section_column_lines = current_column_lines.get(section, [])
                             
-                            print(
-                                f"\nExtracting {section} section from page {page_index + 1}"
-                            )
-                            print(f"  Found {len(section_regions)} region(s)")
-                            print(f"  Found {len(section_column_lines)} column line(s)")
-                            
                             # Ensure section_column_lines is a list
                             if not isinstance(section_column_lines, list):
-                                print(f"  WARNING: section_column_lines is not a list: {type(section_column_lines)}")
                                 if isinstance(section_column_lines, dict):
                                     # Try to convert dict to list
                                     section_column_lines = [section_column_lines]
-                                    print(f"  Converted dict to list with 1 item")
                                 else:
                                     # Initialize as empty list as fallback
                                     section_column_lines = []
-                                    print(f"  Reset to empty list as fallback")
 
                             # Get table extraction parameters
                             table_areas = []
@@ -1952,8 +1867,7 @@ class BulkProcessor(QWidget):
                                     x2 = region[1].get("x", 0)
                                     y2 = region[1].get("y", 0)
                                 else:
-                                    print(f"  Warning: Unrecognized region format: {region}")
-                                    continue
+                                    continue  # Skip unrecognized format
 
                                 # Create table area string
                                 table_area = f"{x1},{y1},{x2},{y2}"
@@ -1962,414 +1876,254 @@ class BulkProcessor(QWidget):
                                 # Process column lines for this region
                                 region_columns = []
                                 
-                                # Debug all column lines for this section
-                                print(f"  Processing column lines for region {region_idx} in {section} section")
-                                print(f"  Column lines count: {len(section_column_lines)}")
-                                print(f"  Column lines type: {type(section_column_lines)}")
-                                
-                                # Fix for single page templates: check structure of column lines
-                                if len(section_column_lines) == 0 and template_data["template_type"] == "single":
-                                    print(f"  WARNING: No column lines found for {section} section in single page template")
-                                    print(f"  Template data column_lines structure: {type(template_data.get('column_lines', {}))}")
-                                    
-                                    # Try to directly access the column lines from the template data
-                                    all_column_lines = template_data.get("column_lines", {})
-                                    if isinstance(all_column_lines, dict) and section in all_column_lines:
-                                        direct_section_column_lines = all_column_lines.get(section, [])
-                                        if direct_section_column_lines:
-                                            print(f"  Found {len(direct_section_column_lines)} column lines directly in template data")
-                                            section_column_lines = direct_section_column_lines
-                                            print(f"  First entry type: {type(direct_section_column_lines[0])}")
-                                    
-                                    # Also check if column_lines might be an array itself (format inconsistency)
-                                    if isinstance(all_column_lines, list) and len(all_column_lines) > 0:
-                                        print(f"  Column lines is a list with {len(all_column_lines)} entries")
-                                        # Use the first entry for single page templates
-                                        if isinstance(all_column_lines[0], dict) and section in all_column_lines[0]:
-                                            first_page_column_lines = all_column_lines[0].get(section, [])
-                                            if first_page_column_lines:
-                                                print(f"  Found {len(first_page_column_lines)} column lines in first page entry")
-                                                section_column_lines = first_page_column_lines
-                                
                                 for line in section_column_lines:
                                     # Handle different column line formats
                                     if isinstance(line, list):
                                         if len(line) >= 3 and line[2] == region_idx:
                                             x_val = line[0].get("x", 0)
                                             region_columns.append(x_val)
-                                            print(f"    Using column at x={x_val} (matched region_idx={region_idx})")
                                         elif len(line) == 2:
                                             # Format without region index: [{x,y}, {x,y}]
                                             x_val = line[0].get("x", 0)
                                             region_columns.append(x_val)
-                                            print(f"    Using column at x={x_val} (list format)")
                                     elif isinstance(line, dict):
                                         # Try different known formats
                                         if "x" in line:
-                                            # Direct format: {x, y}
-                                            x_val = line.get("x", 0)
-                                            region_columns.append(x_val)
-                                            print(f"    Using column at x={x_val} (dict format with x key)")
+                                            region_columns.append(line.get("x", 0))
                                         elif "x1" in line:
-                                            # Rectangle format: {x1, y1, x2, y2}
-                                            x_val = line.get("x1", 0)
-                                            region_columns.append(x_val)
-                                            print(f"    Using column at x={x_val} (dict format with x1 key)")
+                                            region_columns.append(line.get("x1", 0))
                                         elif "value" in line and isinstance(line["value"], (int, float)):
-                                            # Value format: {value: 123}
-                                            x_val = line["value"]
-                                            region_columns.append(x_val)
-                                            print(f"    Using column at x={x_val} (dict format with value key)")
+                                            region_columns.append(line["value"])
                                         elif "position" in line:
-                                            # Position format: {position: 123}
-                                            x_val = line["position"]
-                                            region_columns.append(x_val)
-                                            print(f"    Using column at x={x_val} (dict format with position key)")
+                                            region_columns.append(line["position"])
                                         else:
-                                            # Unknown dict format, try to extract any numeric value
-                                            print(f"    Unknown dict format: {line}")
+                                            # Try to extract any numeric value
                                             for key, val in line.items():
                                                 if isinstance(val, (int, float)):
-                                                    print(f"    Using numeric value {val} from key '{key}'")
                                                     region_columns.append(val)
                                                     break
                                     elif isinstance(line, (int, float)):
-                                        # Direct numeric value
                                         region_columns.append(line)
-                                        print(f"    Using direct numeric value: x={line}")
-                                    else:
-                                        print(f"    Unsupported column line format: {type(line)}, value: {line}")
-                                        # Try to extract a numeric value if it's a string
-                                        if isinstance(line, str):
-                                            try:
-                                                numeric_val = float(line)
-                                                region_columns.append(numeric_val)
-                                                print(f"    Converted string to numeric value: x={numeric_val}")
-                                            except ValueError:
-                                                print(f"    Could not convert string to numeric value")
+                                    elif isinstance(line, str):
+                                        try:
+                                            numeric_val = float(line)
+                                            region_columns.append(numeric_val)
+                                        except ValueError:
+                                            pass  # Skip non-numeric strings
 
-                                # Format column lines
-                                col_str = (
-                                    ",".join([str(x) for x in sorted(region_columns)])
-                                    if region_columns
-                                    else ""
-                                )
-                                columns_list.append(col_str)
+                                    # Format column lines
+                                    col_str = ",".join([str(x) for x in sorted(region_columns)]) if region_columns else ""
+                                    columns_list.append(col_str)
 
-                            # Handle special case for items section with multiple regions
-                            if section == "items" and len(table_areas) > 1:
-                                print(f"  Combining multiple item regions into one ({len(table_areas)} regions)")
+                                # Handle special case for items section with multiple regions
+                                if section == "items" and len(table_areas) > 1:
+                                    # Combine item regions into one
+                                    area_coords = []
+                                    for area in table_areas:
+                                        coords = [float(c) for c in area.split(",")]
+                                        area_coords.append(coords)
 
-                                # Parse all coordinates
-                                area_coords = []
-                                for area in table_areas:
-                                    coords = [float(c) for c in area.split(",")]
-                                    area_coords.append(coords)
+                                    # Find bounding box
+                                    x_coords = [c[0] for c in area_coords] + [c[2] for c in area_coords]
+                                    y_coords = [c[1] for c in area_coords] + [c[3] for c in area_coords]
 
-                                # Find bounding box
-                                x_coords = [c[0] for c in area_coords] + [
-                                    c[2] for c in area_coords
-                                ]
-                                y_coords = [c[1] for c in area_coords] + [
-                                    c[3] for c in area_coords
-                                ]
+                                    x1 = min(x_coords)
+                                    y1 = min(y_coords)
+                                    x2 = max(x_coords)
+                                    y2 = max(y_coords)
 
-                                x1 = min(x_coords)
-                                y1 = min(y_coords)
-                                x2 = max(x_coords)
-                                y2 = max(y_coords)
+                                    # Replace with combined area
+                                    combined_area = f"{x1},{y1},{x2},{y2}"
+                                    table_areas = [combined_area]
 
-                                # Replace with combined area
-                                combined_area = f"{x1},{y1},{x2},{y2}"
-                                table_areas = [combined_area]
-                                print(f"  Combined area: {combined_area}")
+                                    # Combine column lines with deduplication
+                                    all_columns = set()  # Use set for deduplication
+                                    for col_str in columns_list:
+                                        if col_str:
+                                            for col in col_str.split(","):
+                                                all_columns.add(float(col))
+                                    
+                                    # Convert back to list and sort
+                                    all_columns_list = sorted(list(all_columns))
+                                    
+                                    # Remove columns that are too close to each other (within 5 pixels)
+                                    if len(all_columns_list) > 1:
+                                        deduplicated_columns = [all_columns_list[0]]
+                                        for i in range(1, len(all_columns_list)):
+                                            if all_columns_list[i] - deduplicated_columns[-1] >= 5:  # 5 pixel threshold
+                                                deduplicated_columns.append(all_columns_list[i])
+                                        all_columns_list = deduplicated_columns
+                                    
+                                    # Format as string
+                                    col_str = ",".join([str(x) for x in all_columns_list]) if all_columns_list else ""
+                                    columns_list = [col_str]
 
-                                # Combine column lines with deduplication
-                                all_columns = set()  # Use set for deduplication
-                                for col_str in columns_list:
-                                    if col_str:
-                                        for col in col_str.split(","):
-                                            all_columns.add(float(col))
+                                # Set extraction parameters from config more efficiently
+                                extraction_params = {}
+                                if "extraction_params" in config:
+                                    extraction_params = config["extraction_params"]
                                 
-                                # Convert back to list and sort
-                                all_columns_list = sorted(list(all_columns))
-                                
-                                # Remove columns that are too close to each other (within 5 pixels)
-                                if len(all_columns_list) > 1:
-                                    deduplicated_columns = [all_columns_list[0]]
-                                    for i in range(1, len(all_columns_list)):
-                                        if all_columns_list[i] - deduplicated_columns[-1] >= 5:  # 5 pixel threshold
-                                            deduplicated_columns.append(all_columns_list[i])
-                                    all_columns_list = deduplicated_columns
-                                
-                                # Format as string
-                                col_str = ",".join([str(x) for x in all_columns_list]) if all_columns_list else ""
-                                columns_list = [col_str]
-                                print(f"  Combined columns: {col_str}")
-
-                            # Set extraction parameters from config
-                            extraction_params = {}
-                            # Check if we have extraction_params in the config
-                            if "extraction_params" in config:
-                                extraction_params = config["extraction_params"]
-                                print(f"  Found extraction_params in config")
-                            else:
-                                print(
-                                    f"  WARNING: No extraction_params found in config, using direct config values"
-                                )
-
-                            # Get section-specific parameters
-                            section_params = {}
-                            if section in extraction_params:
+                                # Get section-specific parameters with optimized lookups
                                 section_params = extraction_params.get(section, {})
-                                print(
-                                    f"  Found section-specific parameters for {section}"
-                                )
+                                
+                                # Extract row_tol with proper fallbacks
+                                row_tol = section_params.get("row_tol", None)
+                                if row_tol is None:
+                                    # Fallback to direct section config
+                                    section_config = config.get(section, {})
+                                    row_tol = section_config.get("row_tol", None)
+                                    if row_tol is None:
+                                        # Fallback to global config
+                                        row_tol = config.get("row_tol", 10)  # Default to 10 as final fallback
 
-                            # Extract row_tol with proper fallbacks
-                            row_tol = section_params.get("row_tol", None)
-                            if row_tol is not None:
-                                print(
-                                    f"  Using row_tol={row_tol} from extraction_params.{section}"
-                                )
-                            else:
-                                # If not in section_params, check direct section config
-                                section_config = config.get(section, {})
-                                row_tol = section_config.get("row_tol", None)
-                                if row_tol is not None:
-                                    print(
-                                        f"  Using row_tol={row_tol} from config.{section}"
-                                    )
-                                else:
-                                    # If not in direct section config, check global config
-                                    row_tol = config.get("row_tol", None)
-                                if row_tol is not None:
-                                    print(f"  Using global row_tol={row_tol}")
-                                else:
-                                    # STRICT MODE: Raise error instead of using default
-                                    error_msg = f"ERROR: No row_tol defined for {section} in database config"
-                                    print(f"  ❌ {error_msg}")
-                                    raise ValueError(error_msg)
+                                # Get other extraction parameters with fallbacks
+                                split_text = extraction_params.get("split_text", config.get("split_text", True))
+                                strip_text = extraction_params.get("strip_text", config.get("strip_text", "\n"))
+                                flavor = extraction_params.get("flavor", config.get("flavor", "stream"))
 
-                            # Get other extraction parameters with fallbacks
-                            split_text = extraction_params.get(
-                                "split_text", config.get("split_text", True)
-                            )
-                            strip_text = extraction_params.get(
-                                "strip_text", config.get("strip_text", "\n")
-                            )
-                            flavor = extraction_params.get(
-                                "flavor", config.get("flavor", "stream")
-                            )
-                            print(f"  Extraction parameters for {section}:")
-                            print(f"    Table areas: {table_areas}")
-                            print(f"    Columns: {columns_list}")
-                            print(f"    Row tolerance: {row_tol} (from database)")
+                                # Extract tables for this section in parallel if multiple areas
+                                section_tables = []
+                                
+                                # Process each table area
+                                for table_area, columns in zip(table_areas, columns_list):
+                                    # Check if processing should be stopped
+                                    if self.stop_processing:
+                                        return None
+                                    
+                                    try:
+                                        params = {
+                                            "pages": str(page_index + 1),
+                                            "table_areas": [table_area],
+                                            "columns": [columns] if columns else None,
+                                            "split_text": split_text,
+                                            "strip_text": strip_text,
+                                            "flavor": flavor,
+                                            "row_tol": row_tol,
+                                            "parallel": True  # Use internal parallelization
+                                        }
 
-                            # Extract tables for this section
-                            for i, (table_area, columns) in enumerate(zip(table_areas, columns_list)):
-                                try:
-                                    params = {
-                                        "pages": str(page_index + 1),
-                                        "table_areas": [table_area],
-                                        "columns": [columns] if columns else None,
-                                        "split_text": split_text,
-                                        "strip_text": strip_text,
-                                        "flavor": flavor,
-                                        "row_tol": row_tol,
-                                        "parallel": True
-                                    }
+                                        # Extract table using pypdf_table_extraction
+                                        table_result = pypdf_table_extraction.read_pdf(pdf_path, **params)
 
-                                    # Extract table using pypdf_table_extraction
-                                    table_result = pypdf_table_extraction.read_pdf(
-                                        pdf_path, **params
-                                    )
+                                        # Process extracted table
+                                        if table_result and len(table_result) > 0 and hasattr(table_result[0], "df"):
+                                            table_df = table_result[0].df
 
-                                    if (table_result and len(table_result) > 0 and hasattr(table_result[0], "df")):
-                                        table_df = table_result[0].df
+                                            if table_df is not None and not table_df.empty:
+                                                # Add page number to the dataframe
+                                                table_df["pdf_page"] = page_index + 1
 
-                                        if table_df is not None and not table_df.empty:
-                                            # Add page number to the dataframe
-                                            table_df["pdf_page"] = page_index + 1
+                                                # Basic cleaning - optimize by chaining pandas operations
+                                                table_df = (table_df.replace(r"^\s*$", pd.NA, regex=True)
+                                                                  .dropna(how="all")
+                                                                  .dropna(axis=1, how="all"))
 
-                                            # Basic cleaning
-                                            table_df = table_df.replace(
-                                                r"^\s*$", pd.NA, regex=True
-                                            )
-                                            table_df = table_df.dropna(how="all")
-                                            table_df = table_df.dropna(
-                                                axis=1, how="all"
-                                            )
+                                                # Find applicable regex patterns, if any
+                                                regex_patterns = None
 
-                                            # Find applicable regex patterns, if any
-                                            regex_patterns = None
+                                                # Efficiently find applicable regex patterns
+                                                if template_data["template_type"] == "multi" and "page_configs" in template_data:
+                                                    # Check page-specific config first
+                                                    if page_index < len(template_data.get("page_configs", [])):
+                                                        page_config = template_data["page_configs"][page_index]
+                                                        if section in page_config and "regex_patterns" in page_config[section]:
+                                                            regex_patterns = page_config[section]["regex_patterns"]
+                                            
+                                                    # Check section config if no page-specific patterns
+                                                    if regex_patterns is None and section in config:
+                                                        section_config = config[section]
+                                                        if "regex_patterns" in section_config:
+                                                            regex_patterns = section_config["regex_patterns"]
+                                            
+                                                    # Check global regex patterns as fallback
+                                                    if regex_patterns is None and "regex_patterns" in config:
+                                                        if section in config["regex_patterns"]:
+                                                            regex_patterns = config["regex_patterns"][section]
 
-                                            # Check for section-specific regex patterns
-                                            if (
-                                                template_data["template_type"]
-                                                == "multi"
-                                                and "page_configs" in template_data
-                                            ):
-                                                # For multi-page templates, check page-specific config first
-                                                if page_index < len(
-                                                    template_data.get(
-                                                        "page_configs", []
-                                                    )
-                                                ):
-                                                    page_config = template_data[
-                                                        "page_configs"
-                                                    ][page_index]
-                                                    if (
-                                                        section in page_config
-                                                        and "regex_patterns"
-                                                        in page_config[section]
-                                                    ):
-                                                        regex_patterns = page_config[
-                                                            section
-                                                        ]["regex_patterns"]
-                                                        print(
-                                                            f"  Found page-specific regex patterns for {section}"
-                                                        )
-
-                                            # If no page-specific patterns, check section config
-                                            if (
-                                                regex_patterns is None
-                                                and section in config
-                                            ):
-                                                section_config = config[section]
-                                                if "regex_patterns" in section_config:
-                                                    regex_patterns = section_config[
-                                                        "regex_patterns"
-                                                    ]
-                                                    print(
-                                                        f"  Found section-specific regex patterns for {section}"
-                                                    )
-
-                                            # As a fallback, check global regex patterns
-                                            if (
-                                                regex_patterns is None
-                                                and "regex_patterns" in config
-                                            ):
-                                                if section in config["regex_patterns"]:
-                                                    regex_patterns = config[
-                                                        "regex_patterns"
-                                                    ][section]
-                                                    print(
-                                                        f"  Found global regex patterns for {section}"
-                                                    )
-
-                                            # Apply regex patterns only if defined and contain at least one valid pattern
-                                            if regex_patterns:
-                                                # Check if there's at least one non-None pattern
-                                                has_valid_pattern = False
-                                                for pattern_type in [
-                                                    "start",
-                                                    "end",
-                                                    "skip",
-                                                ]:
-                                                    if (
-                                                        pattern_type in regex_patterns
-                                                        and regex_patterns[pattern_type]
-                                                    ):
-                                                        has_valid_pattern = True
-                                                        break
-
-                                                if has_valid_pattern:
-                                                    print(
-                                                        f"  Applying regex patterns to {section} table"
-                                                    )
+                                                # Apply regex patterns with optimized method using precompiled patterns
+                                                if regex_patterns:
+                                                    # Check if there's at least one valid pattern
+                                                    has_valid_pattern = any(regex_patterns.get(pattern_type) for pattern_type in ["start", "end", "skip"])
                                                     
-                                                    # Save original row count for comparison
-                                                    orig_rows = len(table_df)
-                                                    
-                                                    # Apply patterns
-                                                    table_df, regex_status = self.apply_regex_to_dataframe(
-                                                        table_df, regex_patterns
-                                                    )
-                                                    
-                                                    # Report results with more detailed status information
-                                                    if table_df.empty:
-                                                        print(f"  ⚠️ All rows filtered out by regex patterns! Reason: {regex_status['reason']}")
-                                                    elif regex_status['status'] == 'success':
-                                                        filtered_rows = orig_rows - len(table_df)
-                                                        print(f"  ✅ Successfully filtered {filtered_rows} rows, kept {len(table_df)} rows")
-                                                    elif regex_status['status'] == 'partial':
-                                                        filtered_rows = orig_rows - len(table_df)
-                                                        print(f"  ⚠️ Partially successful: {regex_status['reason']}, kept {len(table_df)} rows")
-                                                    else:
-                                                        print(f"  ❌ Regex application issues: {regex_status['reason']}")
+                                                    if has_valid_pattern:
+                                                        # Use precompiled patterns for better performance
+                                                        if section in compiled_regex_patterns:
+                                                            table_df, regex_status = self.apply_regex_to_dataframe(
+                                                                table_df, regex_patterns
+                                                            )
+                                                        else:
+                                                            table_df, regex_status = self.apply_regex_to_dataframe(
+                                                                table_df, regex_patterns
+                                                            )
+                                                        
+                                                        # Store regex status
+                                                        if not table_df.empty:
+                                                            table_df.regex_status = regex_status['status']
 
-                                                    # Store the regex status in the results for later use
-                                                    if not hasattr(table_df, 'regex_status'):
-                                                        table_df.regex_status = regex_status['status']
+                                                    # Store non-empty tables
+                                                    if not table_df.empty:
+                                                        section_tables.append(table_df)
+                                    except Exception:
+                                        # Just continue on error with a specific table
+                                        continue
+                                
+                                # Update results with extracted tables
+                                if section_tables:
+                                    if section == "header":
+                                        page_results["header_tables"].extend(section_tables)
+                                        page_results["extraction_status"]["header"] = "success"
+                                    elif section == "items":
+                                        page_results["items_tables"].extend(section_tables)
+                                        page_results["extraction_status"]["items"] = "success"
+                                    else:  # summary
+                                        page_results["summary_tables"].extend(section_tables)
+                                        page_results["extraction_status"]["summary"] = "success"
+                
+                except Exception:
+                    # Continue to next page on error
+                    pass
+                
+                return page_results
 
-                                            else:
-                                                print(f"  No regex patterns defined for {section}, using raw extraction")
-
-                                            # Store the table
-                                        if not table_df.empty:
-                                            if section == "header":
-                                                results["header_tables"].append(
-                                                    table_df
-                                                )
-                                                print(
-                                                    f"  ✓ Extracted header table with {len(table_df)} rows"
-                                                )
-                                                # Track extraction status
-                                                if hasattr(table_df, 'regex_status'):
-                                                    results["extraction_status"]["header"] = table_df.regex_status
-                                                elif not table_df.empty:
-                                                    results["extraction_status"]["header"] = "success" 
-                                                else:
-                                                    results["extraction_status"]["header"] = "failed"
-                                            elif section == "items":
-                                                results["items_tables"].append(
-                                                    table_df
-                                                )
-                                                print(
-                                                    f"  ✓ Extracted items table with {len(table_df)} rows"
-                                                )
-                                                # Track extraction status
-                                                if hasattr(table_df, 'regex_status'):
-                                                    results["extraction_status"]["items"] = table_df.regex_status
-                                                elif not table_df.empty:
-                                                    results["extraction_status"]["items"] = "success"
-                                                else:
-                                                    results["extraction_status"]["items"] = "failed"
-                                            else:  # summary
-                                                results["summary_tables"].append(
-                                                    table_df
-                                                )
-                                                print(
-                                                    f"  ✓ Extracted summary table with {len(table_df)} rows"
-                                                )
-                                            # Track extraction status
-                                            if hasattr(table_df, 'regex_status'):
-                                                results["extraction_status"]["summary"] = table_df.regex_status
-                                            elif not table_df.empty:
-                                                results["extraction_status"]["summary"] = "success"
-                                            else:
-                                                results["extraction_status"]["summary"] = "failed"
-                                        else:
-                                            print(f"  ℹ Table is empty after processing")
-                                except Exception as e:
-                                    print(f"  ✗ Error extracting table: {str(e)}")
-                                    import traceback
-
-                                    traceback.print_exc()
-
-                                else:
-                                    print(f"No {section} regions defined for page {page_index + 1}")
-
-                except Exception as e:
-                    print(f"Error processing page {page_index + 1}: {str(e)}")
-                    import traceback
-                    traceback.print_exc()
+            # Process pages in parallel using ThreadPoolExecutor for better performance
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(pages_to_process), os.cpu_count() or 4)) as executor:
+                # Submit all page processing tasks
+                future_to_page = {executor.submit(process_page, page_idx): page_idx for page_idx in pages_to_process}
+                
+                # Collect results as they complete
+                for future in concurrent.futures.as_completed(future_to_page):
+                    # Check if processing should be stopped
+                    if self.stop_processing:
+                        executor.shutdown(wait=False)
+                        break
+                        
+                    page_result = future.result()
+                    
+                    # Skip if processing was stopped
+                    if page_result is None:
+                        continue
+                    
+                    # Merge page results into the main results
+                    results["header_tables"].extend(page_result["header_tables"])
+                    results["items_tables"].extend(page_result["items_tables"])
+                    results["summary_tables"].extend(page_result["summary_tables"])
+                    
+                    # Update extraction status
+                    if page_result["extraction_status"]["header"] == "success" and results["extraction_status"]["header"] != "success":
+                        results["extraction_status"]["header"] = "success"
+                    if page_result["extraction_status"]["items"] == "success" and results["extraction_status"]["items"] != "success":
+                        results["extraction_status"]["items"] = "success"
+                    if page_result["extraction_status"]["summary"] == "success" and results["extraction_status"]["summary"] != "success":
+                        results["extraction_status"]["summary"] = "success"
 
             # Close the PDF document
             pdf_document.close()
+            
+            # If processing was stopped, return None
+            if self.stop_processing:
+                return None
 
-            # At the end of processing all pages, update the overall extraction status
             # Update the overall extraction status before returning results
             if results["extraction_status"]["items"] == "success":
                 # If items were successfully extracted, that's most important
@@ -2381,19 +2135,12 @@ class BulkProcessor(QWidget):
                 # Failed if nothing was successfully extracted
                 results["extraction_status"]["overall"] = "failed"
 
-            print(f"\nExtraction summary:")
-            print(f"  Header: {results['extraction_status']['header']}")
-            print(f"  Items: {results['extraction_status']['items']}")
-            print(f"  Summary: {results['extraction_status']['summary']}")
-            print(f"  Overall: {results['extraction_status']['overall']}")
-
             # Return the results
             return results
 
         except Exception as e:
             print(f"Error in extract_invoice_tables: {str(e)}")
             import traceback
-
             traceback.print_exc()
             if "pdf_document" in locals():
                 pdf_document.close()
@@ -2402,11 +2149,9 @@ class BulkProcessor(QWidget):
     def apply_regex_to_dataframe(self, df, regex_patterns):
         """Apply regex patterns to filter and extract relevant rows from DataFrame"""
         if df is None or df.empty:
-            print("    ⚠️ DataFrame is None or empty, skipping regex processing")
             return df, {"status": "failed", "reason": "Empty input data"}
         
         if not regex_patterns:
-            print("    ⚠️ No regex patterns provided, skipping regex processing")
             return df, {"status": "partial", "reason": "No regex patterns"}
 
         # Get patterns, checking if each one is defined
@@ -2414,158 +2159,127 @@ class BulkProcessor(QWidget):
         end_pattern = regex_patterns.get("end", None)
         skip_pattern = regex_patterns.get("skip", None)
 
-        # Print original row count
+        # Original row count
         orig_row_count = len(df)
-        print(f"    Starting with {orig_row_count} rows")
         
         # Check for empty strings and set them to None
         if start_pattern == "":
-            print("    Start pattern is empty string, treating as None")
             start_pattern = None
         if end_pattern == "":
-            print("    End pattern is empty string, treating as None")
             end_pattern = None
         if skip_pattern == "":
-            print("    Skip pattern is empty string, treating as None")
             skip_pattern = None
 
         # Only proceed if at least one pattern is defined and not None
         if not (start_pattern or end_pattern or skip_pattern):
-            print("    No valid regex patterns found, returning original DataFrame")
             return df, {"status": "partial", "reason": "No valid regex patterns"}
 
-        print(f"    Applying regex patterns:")
+        # Pre-compile patterns for better performance
+        compiled_patterns = {}
         if start_pattern:
-            print(f"    • Start pattern: '{start_pattern}'")
+            try:
+                compiled_patterns["start"] = re.compile(start_pattern, re.IGNORECASE)
+            except re.error:
+                pass
         if end_pattern:
-            print(f"    • End pattern: '{end_pattern}'")
+            try:
+                compiled_patterns["end"] = re.compile(end_pattern, re.IGNORECASE)
+            except re.error:
+                pass
         if skip_pattern:
-            print(f"    • Skip pattern: '{skip_pattern}'")
-        
-        # Sample the data to show what we're matching against
-        if not df.empty:
-            sample_rows = min(3, len(df))
-            print(f"    Sample data (first {sample_rows} rows):")
-            for i in range(sample_rows):
-                row_values = " ".join([str(val) for val in df.iloc[i].values])
-                print(f"      Row {i}: {row_values[:100]}...")
+            try:
+                compiled_patterns["skip"] = re.compile(skip_pattern, re.IGNORECASE)
+            except re.error:
+                pass
 
-        # Convert DataFrame to string for easier regex matching
+        # Convert DataFrame to string for regex matching
         try:
             str_df = df.astype(str)
-            print("    Converted DataFrame to string for regex matching")
         except Exception as e:
-            print(f"    ⚠️ Error converting DataFrame to string: {str(e)}")
             return df, {"status": "partial", "reason": f"Error in conversion: {str(e)}"}
 
-        # Apply boundary detection if patterns are provided
+        # Apply boundary detection with precompiled patterns
         if start_pattern or end_pattern:
             start_idx = None
             end_idx = None
 
-            # Find start index based on pattern - only if start_pattern is explicitly defined
-            if start_pattern:
+            # Find start index if start_pattern is defined
+            if start_pattern and "start" in compiled_patterns:
                 try:
-                    print(f"    Searching for start pattern '{start_pattern}'...")
+                    # Optimize by converting rows to strings once
                     for idx, row in str_df.iterrows():
                         row_text = " ".join(row.values)
-                        if re.search(start_pattern, row_text, re.IGNORECASE):
+                        if compiled_patterns["start"].search(row_text):
                             start_idx = idx
-                            print(f"    ✓ Found start pattern match at row {start_idx}")
-                            print(f"      Matched text: {row_text[:100]}...")
                             break
 
-                    # If start pattern is specified but not found, return empty DataFrame
+                    # If start pattern not found, return empty DataFrame
                     if start_idx is None:
-                        print(f"    ⚠️ Start pattern '{start_pattern}' not found in any row")
-                        print(f"    Returning empty DataFrame as no start pattern match was found")
-                        return pd.DataFrame(), {"status": "failed", "reason": f"Start pattern '{start_pattern}' not found"}
-                except re.error as e:
-                    print(f"    ❌ Invalid start pattern '{start_pattern}': {str(e)}")
-                    # Skip this pattern but continue with the others
+                        return pd.DataFrame(), {
+                            "status": "failed", 
+                            "reason": f"Start pattern not found"
+                        }
+                except Exception:
+                    # Skip this pattern on error
                     start_pattern = None
 
-            # If start_pattern had an error or was None, start from the beginning
-            if start_pattern is None:
+            # If start_pattern had an error or was None, start from beginning
+            if start_idx is None:
                 start_idx = 0
-                print(f"    No valid start pattern, starting from first row (index {start_idx})")
 
-            # Find end index based on pattern - only if end_pattern is explicitly defined
-            if end_pattern:
+            # Find end index if end_pattern is defined
+            if end_pattern and "end" in compiled_patterns:
                 try:
-                    print(f"    Searching for end pattern '{end_pattern}' starting from row {start_idx}...")
+                    # Only search from start_idx onwards for efficiency
                     for idx, row in str_df.loc[start_idx:].iterrows():
                         row_text = " ".join(row.values)
-                        if re.search(end_pattern, row_text, re.IGNORECASE):
+                        if compiled_patterns["end"].search(row_text):
                             end_idx = idx
-                            print(f"    ✓ Found end pattern match at row {end_idx}")
-                            print(f"      Matched text: {row_text[:100]}...")
                             break
 
-                    # If end pattern is specified but not found, use the last row
+                    # If end pattern not found, use last row
                     if end_idx is None:
                         end_idx = df.index[-1]
-                        print(f"    ⚠️ End pattern '{end_pattern}' not found, using last row at index {end_idx}")
-                except re.error as e:
-                    print(f"    ❌ Invalid end pattern '{end_pattern}': {str(e)}")
-                    # Skip this pattern but continue with the others
+                except Exception:
+                    # Skip this pattern on error
                     end_pattern = None
 
-            # If end_pattern had an error or was None, use the last row
-            if end_pattern is None:
+            # If end_pattern had an error or was None, use last row
+            if end_idx is None:
                 end_idx = df.index[-1]
-                print(f"    No valid end pattern, using last row (index {end_idx})")
 
             try:
                 # Slice DataFrame to keep only rows between boundaries (inclusive)
-                before_slice = len(df)
                 df = df.loc[start_idx:end_idx]
-                after_slice = len(df)
-                rows_removed = before_slice - after_slice
                 
-                if rows_removed > 0:
-                    print(f"    ✓ Applied boundary slicing: removed {rows_removed} rows, kept {after_slice} rows")
-                else:
-                    print(f"    ℹ Boundary slicing had no effect: kept all {after_slice} rows")
+                # If no rows left after slicing, return empty with failure status
+                if df.empty:
+                    return df, {"status": "failed", "reason": "No rows after boundary detection"}
+                    
+                # Update string DataFrame for skip pattern matching
+                str_df = str_df.loc[start_idx:end_idx]
             except Exception as e:
-                print(f"    ❌ Error during boundary slicing: {str(e)}")
-                # If there's an error in slicing, return the original DataFrame
+                # If there's an error in slicing, return original DataFrame
                 return df, {"status": "partial", "reason": f"Error in boundary slicing: {str(e)}"}
 
-        # Filter out rows matching skip pattern - only if skip_pattern is explicitly defined
-        if skip_pattern and not df.empty:
+        # Filter out rows matching skip pattern efficiently
+        if skip_pattern and "skip" in compiled_patterns and not df.empty:
             try:
-                print(f"    Applying skip pattern '{skip_pattern}'...")
-                before_count = len(df)
+                # Create a mask for rows to keep (more efficient than filtering in a loop)
+                keep_mask = ~str_df.apply(
+                    lambda row: any(compiled_patterns["skip"].search(str(val)) for val in row), 
+                    axis=1
+                )
                 
-                # Create a string version of the current DataFrame
-                str_df = df.astype(str)
-                
-                # Apply the filter
-                df = df[~str_df.apply(lambda row: any(re.search(skip_pattern, str(val), re.IGNORECASE) for val in row), axis=1)]
-                
-                # Report results
-                after_count = len(df)
-                skipped_rows = before_count - after_count
-                
-                if skipped_rows > 0:
-                    print(f"    ✓ Skipped {skipped_rows} rows based on pattern")
-                    print(f"    Final DataFrame size: {after_count} rows")
-                else:
-                    print(f"    ℹ Skip pattern did not match any rows")
+                # Apply the mask once
+                df = df[keep_mask]
                 
                 # Check if we have any rows left
                 if df.empty:
-                    print(f"    ⚠️ All rows were filtered out by skip pattern!")
                     return df, {"status": "failed", "reason": "All rows filtered out by skip pattern"}
                     
-            except re.error as e:
-                print(f"    ❌ Invalid skip pattern '{skip_pattern}': {str(e)}")
-                # If there's an error with the skip pattern, continue with what we have
-                pass
-            except Exception as e:
-                print(f"    ❌ Error applying skip pattern: {str(e)}")
-                # Continue with what we have
+            except Exception:
+                # Continue with what we have on error
                 pass
         
         # Check final state
@@ -2573,7 +2287,7 @@ class BulkProcessor(QWidget):
         reason = "Regex patterns applied successfully"
         
         # Empty result is a failure
-        if  df.empty:
+        if df.empty:
             final_status = "failed"
             reason = "No data remained after applying patterns"
         # If we have significantly fewer rows than we started with, consider it partial
@@ -2584,100 +2298,49 @@ class BulkProcessor(QWidget):
         elif len(df) < 5 and orig_row_count > 10:
             final_status = "partial"
             reason = f"Only {len(df)} rows extracted from {orig_row_count}"
-            
-        print(f"    ✓ Regex processing complete: {final_status} - {reason}")
-        print(f"    Final row count: {len(df)}")
         
         return df, {"status": final_status, "reason": reason}
 
-    def stop_processing(self):
-        """Stop the processing of files"""
-        self.should_stop = True
-        self.status_label.setText("Stopping processing...")
-        
-    def update_processing_time(self, is_final=False):
-        """Update the processing time display"""
-        if self.start_time:
-            elapsed_time = time.time() - self.start_time
-            minutes, seconds = divmod(int(elapsed_time), 60)
-            hours, minutes = divmod(minutes, 60)
+    def stop_processing_handler(self):
+        """Handle stop processing button click"""
+        if not self.stop_processing:
+            reply = QMessageBox.question(
+                self,
+                "Stop Processing",
+                "Are you sure you want to stop processing?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
             
-            if hours > 0:
-                time_str = f"Time: {hours}h {minutes}m {seconds}s"
-            elif minutes > 0:
-                time_str = f"Time: {minutes}m {seconds}s"
-            else:
-                time_str = f"Time: {seconds}s"
+            if reply == QMessageBox.Yes:
+                self.stop_processing = True
+                self.stop_btn.setEnabled(False)
+                self.status_label.setText("Stopping processing...")
+                self.status_label.setStyleSheet(f"""
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    background-color: {self.theme['warning'] + '20'};
+                    color: {self.theme['warning']};
+                    font-weight: bold;
+                """)
                 
-            if is_final:
-                time_str = f"Total {time_str}"
-                
-            self.processing_time_label.setText(time_str)
-
-    def get_selected_template_id(self):
-        """Get the ID of the selected template"""
-        if self.template_combo.count() == 0:
-            return None
-        return self.template_combo.currentData()
-    
-    def open_validation_screen(self):
-        """Open the validation screen with the processed data"""
-        if not self.processed_data:
-            QMessageBox.warning(self, "Warning", "No data to validate. Please process files first.")
-            return
+    def update_processing_time(self):
+        """Update the processing time label"""
+        if self.processing_start_time:
+            elapsed_time = time.time() - self.processing_start_time
+            self.time_label.setText(f"Processing time: {self.format_time(elapsed_time)}")
             
-        # Create validation screen
-        self.validation_screen = ValidationScreen(self)
-        self.validation_screen.back_requested.connect(self.close_validation_screen)
-        
-        # Convert processed data to DataFrame
-        data_frames = []
-        for pdf_path, data in self.processed_data.items():
-            # Combine header, items, and summary data
-            combined_data = {}
-            
-            # Add header data
-            if "header" in data and data["header"]:
-                for table in data["header"]:
-                    if not table.empty:
-                        for col in table.columns:
-                            combined_data[f"header_{col}"] = table[col].iloc[0] if len(table) > 0 else ""
-            
-            # Add items data
-            if "items" in data and data["items"]:
-                for table in data["items"]:
-                    if not table.empty:
-                        for col in table.columns:
-                            combined_data[f"items_{col}"] = table[col].iloc[0] if len(table) > 0 else ""
-            
-            # Add summary data
-            if "summary" in data and data["summary"]:
-                for table in data["summary"]:
-                    if not table.empty:
-                        for col in table.columns:
-                            combined_data[f"summary_{col}"] = table[col].iloc[0] if len(table) > 0 else ""
-            
-            # Add metadata
-            combined_data["pdf_file"] = os.path.basename(pdf_path)
-            combined_data["template_type"] = data.get("template_type", "single")
-            combined_data["pdf_page_count"] = data.get("pdf_page_count", 1)
-            
-            data_frames.append(pd.DataFrame([combined_data]))
-        
-        # Combine all data frames
-        if data_frames:
-            combined_df = pd.concat(data_frames, ignore_index=True)
-            self.validation_screen.set_data(combined_df)
-            
-            # Load any saved rules
-            self.validation_screen.load_rules()
-            
-            # Show validation screen
-            self.validation_screen.show()
-            self.hide()
-    
-    def close_validation_screen(self):
-        """Close the validation screen and return to bulk processor"""
-        if hasattr(self, 'validation_screen'):
-            self.validation_screen.close()
-        self.show()
+    def format_time(self, seconds):
+        """Format seconds into a readable time string"""
+        if seconds < 60:
+            return f"{seconds:.1f}s"
+        elif seconds < 3600:
+            minutes = int(seconds // 60)
+            seconds = seconds % 60
+            return f"{minutes}m {seconds:.1f}s"
+        else:
+            hours = int(seconds // 3600)
+            seconds = seconds % 3600
+            minutes = int(seconds // 60)
+            seconds = seconds % 60
+            return f"{hours}h {minutes}m {seconds:.1f}s"
