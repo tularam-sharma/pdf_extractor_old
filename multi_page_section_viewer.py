@@ -187,12 +187,8 @@ class MultiPageSectionViewer(QWidget):
             'summary': {'row_tol': 10},  # Default for summary
             'split_text': True,
             'strip_text': '\n',
-            'flavor': 'stream',
-            'regex_patterns': {
-                'header': {},
-                'items': {},
-                'summary': {}
-            }
+            'flavor': 'stream'
+            
         }
         
         print("\nExtraction parameters initialized:")
@@ -378,7 +374,7 @@ class MultiPageSectionViewer(QWidget):
                 background-color: #f57c00;
             }
         """)
-        self.retry_btn.setToolTip("Adjust extraction parameters or test regex patterns for table content filtering")
+        self.retry_btn.setToolTip("Adjust extraction parameters for table content")
         
         # Create a new "Save Template" button
         save_template_btn = QPushButton("Save Template")
@@ -592,7 +588,7 @@ class MultiPageSectionViewer(QWidget):
                         # Sort and format column lines
                         col_str = ','.join([str(x) for x in sorted(region_columns)]) if region_columns else ''
                         
-                        # Set extraction parameters without regex
+                        # Set extraction parameters
                         params = {
                             'pages': str(self.current_page),
                             'table_areas': [table_area],
@@ -616,10 +612,6 @@ class MultiPageSectionViewer(QWidget):
                                 table_df = table_df.dropna(axis=1, how='all')
                                 
                                 if not table_df.empty:
-                                    # Apply regex patterns if they exist
-                                    if section in self.extraction_params.get('regex_patterns', {}):
-                                        table_df = self.apply_regex_patterns_to_df(table_df, section)
-                                    
                                     # Process based on section type
                                     if section == 'header':
                                         # Convert to key-value format
@@ -1001,12 +993,7 @@ class MultiPageSectionViewer(QWidget):
                     'summary': {'row_tol': 10},  # Default for summary
                     'split_text': True,
                     'strip_text': '\n',
-                    'flavor': 'stream',
-                    'regex_patterns': {          # Initialize empty regex patterns structure
-                        'header': {},
-                        'items': {},
-                        'summary': {}
-                    }
+                    'flavor': 'stream'
                 }
                 print(f"  Header row_tol: {self.extraction_params['header']['row_tol']}")
                 print(f"  Items row_tol: {self.extraction_params['items']['row_tol']}")
@@ -1042,16 +1029,7 @@ class MultiPageSectionViewer(QWidget):
                                 self.extraction_params['flavor'] = latest_params['flavor']
                                 print(f"  Updated flavor: {latest_params['flavor']}")
                             
-                            # Merge regex patterns if they exist
-                            if 'regex_patterns' in latest_params:
-                                print("  Found regex patterns in main window:")
-                                for section, patterns in latest_params['regex_patterns'].items():
-                                    if section in self.extraction_params['regex_patterns'] and patterns:
-                                        for p_type, pattern in patterns.items():
-                                            self.extraction_params['regex_patterns'][section][p_type] = pattern
-                                            print(f"    Added {section} {p_type} pattern: {pattern}")
-                            
-                            break
+                            # break
             except Exception as e:
                 print(f"Could not get latest extraction params from main window: {str(e)}")
             
@@ -1066,14 +1044,6 @@ class MultiPageSectionViewer(QWidget):
             print(f"  strip_text: {repr(self.extraction_params['strip_text'])}")
             print(f"  flavor: {self.extraction_params['flavor']}")
             
-            # Print regex patterns if they exist
-            if 'regex_patterns' in self.extraction_params:
-                print("\nRegex patterns being saved to template:")
-                for section, patterns in self.extraction_params['regex_patterns'].items():
-                    if patterns:
-                        print(f"  {section.title()} patterns:")
-                        for pattern_type, pattern in patterns.items():
-                            print(f"    {pattern_type}: {pattern}")
             
             print(f"\nSaving multi-page template '{name}' with {len(page_regions)} pages")
             print(f"Page regions count: {len(page_regions)}")
@@ -1102,7 +1072,7 @@ class MultiPageSectionViewer(QWidget):
                 )
                 print(f"Template saved successfully with ID: {template_id}")               
                 # Navigate to template manager screen
-                self.navigate_to_template_manager()
+                # self.navigate_to_template_manager()
             else:
                 raise Exception("Failed to save template - no template ID returned")
             
@@ -1133,286 +1103,73 @@ class MultiPageSectionViewer(QWidget):
 
     def extract_with_new_params(self, section, table_areas, column_lines):
         """Show dialog to adjust extraction parameters and retry with new settings"""
-        # Create a dialog for parameter adjustment
-        param_dialog = QDialog(self)
-        param_dialog.setWindowTitle(f"Adjust {section.title()} Extraction Parameters")
-        param_dialog.setMinimumWidth(450)
-        param_dialog.setStyleSheet("""
-            QDialog {
-                background-color: #2c3e50;
-            }
-            QLabel { 
-                color: white; 
-                margin: 2px 0;
-            }
-            QCheckBox { 
-                color: white; 
-            }
-            QSpinBox {
-                color: white;
-                background-color: #34495e;
-                border: 1px solid #3498db;
-                border-radius: 3px;
-                padding: 3px;
-            }
-            QLineEdit {
-                color: white;
-                background-color: #34495e;
-                border: 1px solid #3498db;
-                border-radius: 3px;
-                padding: 3px;
-            }
-            QPushButton {
-                background-color: #3498db;
-                color: white;
-                padding: 6px 12px;
-                border-radius: 4px;
-                min-width: 80px;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
-        """)
-        
-        # Create form layout
-        layout = QFormLayout(param_dialog)
-        layout.setSpacing(10)
-        layout.setContentsMargins(20, 20, 20, 20)
-        
-        # Add header text
-        header_label = QLabel(f"Adjust parameters for {section.title()} section extraction")
-        header_label.setFont(QFont("Arial", 11, QFont.Bold))
-        header_label.setStyleSheet("color: white; margin-bottom: 10px;")
-        layout.addRow(header_label)
-        
-        # Get current row_tol if it exists in extraction_params
-        current_row_tol = None
-        if hasattr(self, 'extraction_params') and section in self.extraction_params:
-            if 'row_tol' in self.extraction_params[section]:
-                current_row_tol = self.extraction_params[section]['row_tol']
-        
-        # If no existing value, use the recommended defaults
-        if current_row_tol is None:
-            if section == 'header':
-                current_row_tol = 5      # Default for header
-            elif section == 'items':
-                current_row_tol = 15     # Default for items
-            else:  # summary
-                current_row_tol = 10     # Default for summary
-        
-        # Row tolerance parameter
-        row_tol_input = QSpinBox()
-        row_tol_input.setRange(1, 50)
-        row_tol_input.setValue(current_row_tol)
-        row_tol_input.setToolTip("Tolerance for grouping text into rows (higher value = more text in same row)")
-        layout.addRow("Row Tolerance:", row_tol_input)
-        
-        # Get current split_text value
-        current_split_text = True
-        if hasattr(self, 'extraction_params') and 'split_text' in self.extraction_params:
-            current_split_text = self.extraction_params['split_text']
-        
-        # Split text parameter
-        split_text_input = QCheckBox("Enable")
-        split_text_input.setChecked(current_split_text)
-        split_text_input.setToolTip("Split text that may contain multiple values")
-        layout.addRow("Split Text:", split_text_input)
-        
-        # Get current strip_text value
-        current_strip_text = "\\n"
-        if hasattr(self, 'extraction_params') and 'strip_text' in self.extraction_params:
-            current_strip_text = repr(self.extraction_params['strip_text']).strip("'")
-            if current_strip_text == "\\n":
-                current_strip_text = "\\n"
-        
-        # Strip text parameter
-        strip_text_input = QLineEdit()
-        strip_text_input.setText(current_strip_text)
-        strip_text_input.setToolTip("Characters to strip from text (use \\n for newlines)")
-        layout.addRow("Strip Text:", strip_text_input)
-        
-        # Add buttons
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        ok_button = buttons.button(QDialogButtonBox.Ok)
-        ok_button.setText("Extract")
-        cancel_button = buttons.button(QDialogButtonBox.Cancel)
-        buttons.accepted.connect(param_dialog.accept)
-        buttons.rejected.connect(param_dialog.reject)
-        
-        # Add vertical spacing
-        layout.addItem(QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding))
-        
-        # Add buttons to layout
-        layout.addRow(buttons)
-        
-        # Show dialog and get result
-        if param_dialog.exec() == QDialog.Accepted:
-            # Get the new parameters
-            new_params = {
-                'row_tol': row_tol_input.value(),
-                'split_text': split_text_input.isChecked(),
-                'strip_text': strip_text_input.text().replace('\\n', '\n'),
-                'flavor': 'stream'  # Keep this fixed
-            }
+        try:
+            # Create dialog for parameter adjustment
+            dialog = QDialog(self)
+            dialog.setWindowTitle(f"Adjust {section.title()} Extraction Parameters")
+            dialog.setMinimumWidth(400)
             
-            # Update extraction parameters
-            if not hasattr(self, 'extraction_params'):
-                self.extraction_params = {}
+            # Create form layout
+            form_layout = QFormLayout()
             
-            # Make sure all section dictionaries exist
-            for sec in ['header', 'items', 'summary']:
-                if sec not in self.extraction_params:
-                    self.extraction_params[sec] = {}
+            # Add row tolerance input
+            row_tol_input = QSpinBox()
+            row_tol_input.setRange(1, 50)
+            row_tol_input.setValue(self.extraction_params[section]['row_tol'])
+            form_layout.addRow("Row Tolerance:", row_tol_input)
             
-            # Update the specific section parameters
-            self.extraction_params[section]['row_tol'] = new_params['row_tol']
+            # Add split text checkbox
+            split_text_check = QCheckBox()
+            split_text_check.setChecked(self.extraction_params['split_text'])
+            form_layout.addRow("Split Text:", split_text_check)
             
-            # Update global parameters
-            self.extraction_params['split_text'] = new_params['split_text']
-            self.extraction_params['strip_text'] = new_params['strip_text']
-            self.extraction_params['flavor'] = new_params['flavor']
+            # Add strip text input
+            strip_text_input = QLineEdit()
+            strip_text_input.setText(self.extraction_params['strip_text'])
+            form_layout.addRow("Strip Text:", strip_text_input)
             
-            # Make sure regex_patterns structure exists
-            if 'regex_patterns' not in self.extraction_params:
-                self.extraction_params['regex_patterns'] = {
-                    'header': {},
-                    'items': {},
-                    'summary': {}
+            # Add flavor selection
+            flavor_combo = QComboBox()
+            flavor_combo.addItems(['stream', 'lattice'])
+            flavor_combo.setCurrentText(self.extraction_params['flavor'])
+            form_layout.addRow("Flavor:", flavor_combo)
+            
+            # Add buttons
+            button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+            button_box.accepted.connect(dialog.accept)
+            button_box.rejected.connect(dialog.reject)
+            
+            # Add everything to dialog layout
+            layout = QVBoxLayout()
+            layout.addLayout(form_layout)
+            layout.addWidget(button_box)
+            dialog.setLayout(layout)
+            
+            # Show dialog and get result
+            if dialog.exec() == QDialog.Accepted:
+                # Get new parameters
+                new_params = {
+                    'row_tol': row_tol_input.value(),
+                    'split_text': split_text_check.isChecked(),
+                    'strip_text': strip_text_input.text(),
+                    'flavor': flavor_combo.currentText()
                 }
-            
-            # Print current extraction parameters for debugging
-            print(f"\nUpdated extraction parameters:")
-            print(f"  {section.title()} row_tol: {self.extraction_params[section]['row_tol']}")
-            print(f"  split_text: {self.extraction_params['split_text']}")
-            print(f"  strip_text: {repr(self.extraction_params['strip_text'])}")
-            
-            # Print regex patterns if they exist
-            print("\nRegex patterns in extraction parameters:")
-            for sec, patterns in self.extraction_params['regex_patterns'].items():
-                if patterns:
-                    print(f"  {sec.title()} patterns:")
-                    for pattern_type, pattern in patterns.items():
-                        print(f"    {pattern_type}: {pattern}")
-            
-            # Also store in main window for reference during template saves
-            try:
-                from PySide6.QtWidgets import QApplication
-                from main import PDFHarvest  # Import the main window class
                 
-                # Look specifically for the main application window
-                for widget in QApplication.topLevelWidgets():
-                    if isinstance(widget, PDFHarvest):
-                        # Store the extraction_params on the main window
-                        if not hasattr(widget, 'latest_extraction_params'):
-                            widget.latest_extraction_params = {}
-                            
-                        # Ensure all section dictionaries exist in main window params
-                        for sec in ['header', 'items', 'summary']:
-                            if sec not in widget.latest_extraction_params:
-                                widget.latest_extraction_params[sec] = {}
-                        
-                        # Update section parameters
-                        widget.latest_extraction_params[section]['row_tol'] = new_params['row_tol']
-                        
-                        # Update global parameters
-                        widget.latest_extraction_params['split_text'] = new_params['split_text']
-                        widget.latest_extraction_params['strip_text'] = new_params['strip_text']
-                        widget.latest_extraction_params['flavor'] = new_params['flavor']
-                        
-                        # Make sure regex_patterns structure exists in main window
-                        if 'regex_patterns' not in widget.latest_extraction_params:
-                            widget.latest_extraction_params['regex_patterns'] = {
-                                'header': {},
-                                'items': {},
-                                'summary': {}
-                            }
-                        
-                        # Copy over all regex patterns from our local extraction_params
-                        if 'regex_patterns' in self.extraction_params:
-                            for sec, patterns in self.extraction_params['regex_patterns'].items():
-                                if sec not in widget.latest_extraction_params['regex_patterns']:
-                                    widget.latest_extraction_params['regex_patterns'][sec] = {}
-                                
-                                # Copy patterns for this section
-                                for p_type, pattern in patterns.items():
-                                    widget.latest_extraction_params['regex_patterns'][sec][p_type] = pattern
-                        
-                        print("\nStored extraction parameters in main window for template saving")
-                        break
-            except Exception as e:
-                print(f"Error storing extraction parameters in main window: {str(e)}")
-                import traceback
-                traceback.print_exc()
-            
-            # Process for multiple tables
-            if len(table_areas) > 1:
-                processed_tables = []
+                # Update extraction parameters
+                self.extraction_params[section]['row_tol'] = new_params['row_tol']
+                self.extraction_params['split_text'] = new_params['split_text']
+                self.extraction_params['strip_text'] = new_params['strip_text']
+                self.extraction_params['flavor'] = new_params['flavor']
                 
-                for idx, (table_area, col_line) in enumerate(zip(table_areas, column_lines)):
-                    try:
-                        # Parameters for this single table with new values
-                        single_table_params = {
-                            'pages': str(self.current_page),
-                            'table_areas': [table_area],
-                            'columns': [col_line] if col_line else None,
-                            'split_text': new_params['split_text'],
-                            'strip_text': new_params['strip_text'],
-                            'flavor': new_params['flavor'],
-                            'row_tol': new_params['row_tol']
-                        }
-                        
-                        # Add regex patterns if defined
-                        if hasattr(self, 'extraction_params') and 'regex_patterns' in self.extraction_params:
-                            if section in self.extraction_params['regex_patterns']:
-                                regex_patterns = self.extraction_params['regex_patterns'][section]
-                                if regex_patterns:
-                                    print(f"  Applying regex patterns: {regex_patterns}")
-                                    
-                                    # Apply start pattern if defined
-                                    if 'start' in regex_patterns and regex_patterns['start']:
-                                        single_table_params['start_regex'] = regex_patterns['start']
-                                    
-                                    # Apply end pattern if defined
-                                    if 'end' in regex_patterns and regex_patterns['end']:
-                                        single_table_params['end_regex'] = regex_patterns['end']
-                                    
-                                    # Apply skip pattern if defined
-                                    if 'skip' in regex_patterns and regex_patterns['skip']:
-                                        single_table_params['skip_regex'] = regex_patterns['skip']
-                        
-                        print(f"  Using parameters: {single_table_params}")
-                        
-                        # Extract just this table
-                        table_result = pypdf_table_extraction.read_pdf(self.pdf_path, **single_table_params)
-                        
-                        if table_result and len(table_result) > 0 and table_result[0].df is not None:
-                            table_df = table_result[0].df
-                            
-                            # Clean up the DataFrame
-                            table_df = table_df.replace(r'^\s*$', pd.NA, regex=True)
-                            table_df = table_df.dropna(how='all')
-                            table_df = table_df.dropna(axis=1, how='all')
-                            
-                            if not table_df.empty:
-                                processed_tables.append(table_df)
-                            
-                    except Exception as e:
-                        print(f"Error extracting table {idx + 1}: {str(e)}")
+                # Print current extraction parameters for debugging
+                print(f"\nUpdated extraction parameters:")
+                print(f"  {section.title()} row_tol: {self.extraction_params[section]['row_tol']}")
+                print(f"  split_text: {self.extraction_params['split_text']}")
+                print(f"  strip_text: {repr(self.extraction_params['strip_text'])}")
                 
-                # Update the display with tables in the correct order
-                if processed_tables:
-                    # Store the newly extracted data
-                    current_page_data = self.all_pages_data[self.current_page - 1]
-                    current_page_data[section] = processed_tables
-                    self.update_data_table_for_header(processed_tables, section)
-                else:
-                    current_page_data = self.all_pages_data[self.current_page - 1]
-                    current_page_data[section] = None
-                    self.update_data_table(None, section)
-            else:
                 # Single table extraction with new parameters
                 single_table_params = {
-                    'pages': str(self.current_page),
+                    'pages': '1',
                     'table_areas': table_areas,
                     'columns': column_lines if column_lines else None,
                     'split_text': new_params['split_text'],
@@ -1421,60 +1178,39 @@ class MultiPageSectionViewer(QWidget):
                     'row_tol': new_params['row_tol']
                 }
                 
-                # Add regex patterns if defined
-                if hasattr(self, 'extraction_params') and 'regex_patterns' in self.extraction_params:
-                    if section in self.extraction_params['regex_patterns']:
-                        regex_patterns = self.extraction_params['regex_patterns'][section]
-                        if regex_patterns:
-                            print(f"Applying regex patterns: {regex_patterns}")
-                            
-                            # Apply start pattern if defined
-                            if 'start' in regex_patterns and regex_patterns['start']:
-                                single_table_params['start_regex'] = regex_patterns['start']
-                            
-                            # Apply end pattern if defined
-                            if 'end' in regex_patterns and regex_patterns['end']:
-                                single_table_params['end_regex'] = regex_patterns['end']
-                            
-                            # Apply skip pattern if defined
-                            if 'skip' in regex_patterns and regex_patterns['skip']:
-                                single_table_params['skip_regex'] = regex_patterns['skip']
-                
                 print(f"\nRetrying single table extraction with new parameters: {single_table_params}")
                 
-                try:
-                    # Extract table with new parameters
-                    table_result = pypdf_table_extraction.read_pdf(self.pdf_path, **single_table_params)
+                # Extract just this table
+                table_result = pypdf_table_extraction.read_pdf(self.pdf_path, **single_table_params)
+                
+                if table_result and len(table_result) > 0 and table_result[0].df is not None:
+                    table_df = table_result[0].df
                     
-                    if table_result and len(table_result) > 0 and table_result[0].df is not None:
-                        table_df = table_result[0].df
+                    print(f"  Raw data extracted:")
+                    print(table_df)
+                    
+                    if not table_df.empty:
+                        print(f"  Successfully extracted table with {len(table_df)} rows and {len(table_df.columns)} columns")
                         
-                        # Clean up the DataFrame
-                        table_df = table_df.replace(r'^\s*$', pd.NA, regex=True)
-                        table_df = table_df.dropna(how='all')
-                        table_df = table_df.dropna(axis=1, how='all')
-                        
-                        if not table_df.empty:
-                            # Store the newly extracted data
-                            current_page_data = self.all_pages_data[self.current_page - 1]
-                            current_page_data[section] = table_df
-                            self.update_data_table(table_df, section)
-                        else:
-                            current_page_data = self.all_pages_data[self.current_page - 1]
-                            current_page_data[section] = None
-                            self.update_data_table(None, section)
+                        # Update the appropriate DataFrame based on section
+                        if section == 'header':
+                            self.header_df = table_df
+                            self.update_data_table_for_header(table_df, 'header')
+                        elif section == 'items':
+                            self.item_details_df = table_df
+                            self.update_data_table(table_df, 'items')
+                        elif section == 'summary':
+                            self.summary_df = table_df
+                            self.update_data_table(table_df, 'summary')
                     else:
-                        current_page_data = self.all_pages_data[self.current_page - 1]
-                        current_page_data[section] = None
-                        self.update_data_table(None, section)
-                    
-                except Exception as e:
-                    print(f"Error extracting table: {str(e)}")
-                    current_page_data = self.all_pages_data[self.current_page - 1]
-                    current_page_data[section] = None
-                    self.update_data_table(None, section)
-            
-        return param_dialog.result() == QDialog.Accepted
+                        print(f"  No valid data found after cleaning")
+                else:
+                    print(f"  No data extracted from table area")
+                
+        except Exception as e:
+            print(f"Error in extract_with_new_params: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
     def update_data_table_for_header(self, table_list, section_type='header'):
         """Method to display multiple tables of a section type (header or summary)"""
@@ -1680,14 +1416,6 @@ class MultiPageSectionViewer(QWidget):
                                 self.data_table.setItem(row_count, 1, value_item)
                                 row_count += 1
                 
-                # Apply tree-like styling to the first column
-                # for row in range(self.data_table.rowCount()):
-                #     item = self.data_table.item(row, 0)
-                #     if item and (item.text().startswith('  ') or item.text().startswith('SECTION:')):
-                #         font = item.font()
-                #         if item.text().startswith('SECTION:'):
-                #             font.setBold(True)
-                #         item.setFont(font)
                 
                 # Adjust column widths for better readability
                 header = self.data_table.horizontalHeader()
@@ -1750,7 +1478,7 @@ class MultiPageSectionViewer(QWidget):
             self.update_tables()
 
     def show_custom_settings(self):
-        """Show the custom settings dialog for the current section"""
+        """Show dialog to adjust extraction parameters"""
         # Get current page's regions
         current_regions = self.regions
         if isinstance(self.regions, dict) and (self.current_page - 1) in self.regions:
@@ -1814,757 +1542,12 @@ class MultiPageSectionViewer(QWidget):
                     # Empty string for regions with no column lines
                     column_lines.append('')
             
-            # Create a dialog for settings
-            settings_dialog = QDialog(self)
-            settings_dialog.setWindowTitle(f"{self.current_section.title()} Section Settings")
-            settings_dialog.setMinimumWidth(400)
-            settings_dialog.setStyleSheet("""
-                QDialog {
-                    background-color: #2c3e50;
-                }
-                QLabel { 
-                    color: white; 
-                    margin: 2px 0;
-                }
-                QPushButton {
-                    background-color: #3498db;
-                    color: white;
-                    padding: 15px;
-                    border-radius: 4px;
-                    min-width: 200px;
-                    margin: 10px;
-                    font-weight: bold;
-                }
-                QPushButton:hover {
-                    background-color: #2980b9;
-                }
-            """)
-            
-            # Create layout
-            layout = QVBoxLayout(settings_dialog)
-            layout.setSpacing(20)
-            layout.setContentsMargins(20, 20, 20, 20)
-            
-            # Add header text
-            header_label = QLabel(f"Choose which settings you want to adjust:")
-            header_label.setFont(QFont("Arial", 11))
-            header_label.setStyleSheet("color: white; margin-bottom: 20px;")
-            layout.addWidget(header_label)
-            
-            # Add Adjust Extraction Parameters button
-            adjust_params_btn = QPushButton("Adjust Extraction Parameters")
-            adjust_params_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #3498db;
-                }
-                QPushButton:hover {
-                    background-color: #2980b9;
-                }
-            """)
-            layout.addWidget(adjust_params_btn)
-            
-            # Add Test Regex Patterns button
-            test_regex_btn = QPushButton("Test Regex Patterns")
-            test_regex_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #f39c12;
-                }
-                QPushButton:hover {
-                    background-color: #e67e22;
-                }
-            """)
-            layout.addWidget(test_regex_btn)
-            
-            # Add handlers for the buttons
-            def on_adjust_params():
-                settings_dialog.accept()
-                self.extract_with_new_params(self.current_section, table_areas, column_lines)
-            
-            def on_test_regex():
-                settings_dialog.accept()
-                self.show_regex_test_dialog(self.current_section)
-            
-            adjust_params_btn.clicked.connect(on_adjust_params)
-            test_regex_btn.clicked.connect(on_test_regex)
-            
-            # Show dialog
-            settings_dialog.exec()
-            
-            return settings_dialog.result() == QDialog.Accepted
+            # Extract with new parameters
+            self.extract_with_new_params(self.current_section, table_areas, column_lines)
+            return True
         else:
             QMessageBox.warning(self, "Warning", f"No regions defined for {self.current_section} section")
             return False
-
-    def show_regex_test_dialog(self, section):
-        """Show dialog for testing regex patterns on current section data"""
-        try:
-            dialog = QDialog(self)
-            dialog.setWindowTitle(f"Test Regex Patterns - {section.title()}")
-            dialog.setMinimumWidth(600)
-            dialog.setStyleSheet("""
-                QDialog {
-                    background-color: #2c3e50;
-                }
-                QLabel { 
-                    color: white; 
-                    margin: 2px 0;
-                }
-                QLineEdit {
-                    color: white;
-                    background-color: #34495e;
-                    border: 1px solid #3498db;
-                    border-radius: 3px;
-                    padding: 3px;
-                }
-                QPushButton {
-                    background-color: #3498db;
-                    color: white;
-                    padding: 6px 12px;
-                    border-radius: 4px;
-                    min-width: 80px;
-                }
-                QPushButton:hover {
-                    background-color: #2980b9;
-                }
-                QComboBox {
-                    color: white;
-                    background-color: #34495e;
-                    border: 1px solid #3498db;
-                    border-radius: 3px;
-                    padding: 3px;
-                }
-                QCheckBox {
-                    color: white;
-                }
-                QTextEdit {
-                    color: white;
-                    background-color: #34495e;
-                    border: 1px solid #3498db;
-                    border-radius: 3px;
-                    padding: 5px;
-                }
-            """)
-            
-            layout = QVBoxLayout(dialog)
-            layout.setSpacing(10)
-            layout.setContentsMargins(20, 20, 20, 20)
-            
-            # Add header
-            header = QLabel(f"Test Regex Patterns for {section.title()} Section")
-            header.setFont(QFont("Arial", 12, QFont.Bold))
-            layout.addWidget(header)
-            
-            # Pattern type selection
-            pattern_type_layout = QHBoxLayout()
-            pattern_type_label = QLabel("Pattern Type:")
-            pattern_type_combo = QComboBox()
-            pattern_type_combo.addItems(["Start", "End", "Skip"])
-            pattern_type_layout.addWidget(pattern_type_label)
-            pattern_type_layout.addWidget(pattern_type_combo)
-            layout.addLayout(pattern_type_layout)
-            
-            # Pattern input
-            pattern_layout = QHBoxLayout()
-            pattern_label = QLabel("Pattern:")
-            pattern_input = QLineEdit()
-            pattern_input.setPlaceholderText("Enter regex pattern (e.g., 'Item.*Description' or 'Total|Subtotal')")
-            pattern_layout.addWidget(pattern_label)
-            pattern_layout.addWidget(pattern_input)
-            layout.addLayout(pattern_layout)
-            
-            # Add explanation for common patterns
-            pattern_examples = QLabel("Examples: 'Item.*Description' (header row), 'Total|Subtotal' (end row), 'Page \\d+' (skip row)")
-            pattern_examples.setStyleSheet("color: #bdc3c7; font-style: italic;")
-            layout.addWidget(pattern_examples)
-            
-            # Add match handling options
-            match_options_group = QGroupBox("Match Handling")
-            match_options_group.setStyleSheet("QGroupBox { color: white; }")
-            match_options_layout = QVBoxLayout()
-            
-            include_matches_check = QCheckBox("Include matched rows")
-            include_matches_check.setChecked(True)
-            exclude_matches_check = QCheckBox("Exclude matched rows")
-            exclude_matches_check.setChecked(False)
-            
-            # Connect checkboxes to be mutually exclusive
-            def on_include_changed(checked):
-                if checked:
-                    exclude_matches_check.setChecked(False)
-            
-            def on_exclude_changed(checked):
-                if checked:
-                    include_matches_check.setChecked(False)
-            
-            include_matches_check.toggled.connect(on_include_changed)
-            exclude_matches_check.toggled.connect(on_exclude_changed)
-            
-            match_options_layout.addWidget(include_matches_check)
-            match_options_layout.addWidget(exclude_matches_check)
-            match_options_group.setLayout(match_options_layout)
-            layout.addWidget(match_options_group)
-            
-            # Test button
-            test_button = QPushButton("Test Pattern")
-            test_button.setStyleSheet("""
-                QPushButton {
-                    background-color: #f39c12;
-                }
-                QPushButton:hover {
-                    background-color: #e67e22;
-                }
-            """)
-            layout.addWidget(test_button)
-            
-            # Results area
-            results_label = QLabel("Results:")
-            results_label.setFont(QFont("Arial", 10, QFont.Bold))
-            layout.addWidget(results_label)
-            
-            results_text = QTextEdit()
-            results_text.setReadOnly(True)
-            layout.addWidget(results_text)
-            
-            # Highlight checkbox
-            highlight_check = QCheckBox("Highlight matches on PDF")
-            highlight_check.setChecked(True)
-            layout.addWidget(highlight_check)
-            
-            # Apply button (initially disabled)
-            apply_button = QPushButton("Apply to Template")
-            apply_button.setEnabled(False)
-            apply_button.setStyleSheet("""
-                QPushButton {
-                    background-color: #27ae60;
-                }
-                QPushButton:hover {
-                    background-color: #219a52;
-                }
-                QPushButton:disabled {
-                    background-color: #7f8c8d;
-                }
-            """)
-            layout.addWidget(apply_button)
-            
-            # Close button
-            close_button = QPushButton("Close")
-            close_button.clicked.connect(lambda: on_close())
-            layout.addWidget(close_button)
-            
-            def on_close():
-                try:
-                    print("\nApplying all patterns and closing dialog...")
-                    
-                    # Apply patterns to current page data
-                    current_page_data = self.all_pages_data[self.current_page - 1]
-                    section_data = current_page_data[section]
-                    
-                    if section_data is not None:
-                        if isinstance(section_data, list):
-                            processed_tables = []
-                            for df in section_data:
-                                if df is not None and not df.empty:
-                                    processed_df = self.apply_regex_patterns_to_df(df, section)
-                                    if processed_df is not None and not processed_df.empty:
-                                        processed_tables.append(processed_df)
-                            
-                            if processed_tables:
-                                current_page_data[section] = processed_tables
-                                self.update_data_table_for_header(processed_tables, section)
-                            else:
-                                current_page_data[section] = None
-                                self.update_data_table(None, section)
-                        else:
-                            processed_df = self.apply_regex_patterns_to_df(section_data, section)
-                            if processed_df is not None and not processed_df.empty:
-                                current_page_data[section] = processed_df
-                                self.update_data_table(processed_df, section)
-                            else:
-                                current_page_data[section] = None
-                                self.update_data_table(None, section)
-                    
-                    # If this is the items section, apply to all other pages
-                    if section == 'items':
-                        for page_idx, page_data in enumerate(self.all_pages_data):
-                            if page_idx != self.current_page - 1 and 'items' in page_data and page_data['items'] is not None:
-                                section_data = page_data['items']
-                                if isinstance(section_data, list):
-                                    processed_tables = []
-                                    for df in section_data:
-                                        if df is not None and not df.empty:
-                                            processed_df = self.apply_regex_patterns_to_df(df, section)
-                                            if processed_df is not None and not processed_df.empty:
-                                                processed_tables.append(processed_df)
-                                    page_data['items'] = processed_tables if processed_tables else None
-                                else:
-                                    processed_df = self.apply_regex_patterns_to_df(section_data, section)
-                                    page_data['items'] = processed_df if processed_df is not None and not processed_df.empty else None
-                    
-                    print("All patterns applied successfully")
-                    dialog.accept()
-                    
-                except Exception as e:
-                    print(f"Error in on_close: {str(e)}")
-                    import traceback
-                    traceback.print_exc()
-                    results_text.setText(f"Error applying patterns: {str(e)}")
-                    # Don't close the dialog on error
-                    return False
-            
-            # Store current matches and non-matches
-            current_matches = []
-            current_non_matches = []
-            
-            # Add event handlers
-            def on_test_clicked():
-                nonlocal current_matches, current_non_matches
-                pattern = pattern_input.text()
-                pattern_type = pattern_type_combo.currentText().lower()
-                include_matches = include_matches_check.isChecked()
-                
-                if not pattern:
-                    results_text.setText("Please enter a pattern to test")
-                    return
-                    
-                try:
-                    # Get current page data
-                    current_page_data = self.all_pages_data[self.current_page - 1]
-                    df = current_page_data[section]
-                    
-                    if df is None or (isinstance(df, pd.DataFrame) and df.empty):
-                        results_text.setText("No data available to test against")
-                        return
-                    
-                    # Test the pattern
-                    matches, non_matches, error = self.test_regex_pattern(pattern, section, pattern_type)
-                    
-                    if error:
-                        results_text.setText(f"Error: {error}")
-                        return
-                    
-                    # Store current matches and non-matches
-                    current_matches = matches
-                    current_non_matches = non_matches
-                    
-                    # Format results based on match handling options
-                    results = []
-                    results.append(f"Pattern: {pattern}")
-                    results.append(f"Type: {pattern_type}")
-                    results.append(f"Match Handling: {'Include' if include_matches else 'Exclude'} matches")
-                    
-                    if include_matches:
-                        results.append(f"\nMatches ({len(matches)}):")
-                        for table_idx, row_idx, text, is_first in matches:
-                            results.append(f"Table {table_idx + 1}, Row {row_idx}: {text}")
-                        
-                        results.append(f"\nNon-matches ({len(non_matches)}):")
-                        for table_idx, row_idx, text, _ in non_matches:
-                            results.append(f"Table {table_idx + 1}, Row {row_idx}: {text}")
-                    else:
-                        results.append(f"\nExcluded matches ({len(matches)}):")
-                        for table_idx, row_idx, text, is_first in matches:
-                            results.append(f"Table {table_idx + 1}, Row {row_idx}: {text}")
-                        
-                        results.append(f"\nIncluded rows ({len(non_matches)}):")
-                        for table_idx, row_idx, text, _ in non_matches:
-                            results.append(f"Table {table_idx + 1}, Row {row_idx}: {text}")
-                    
-                    results_text.setText('\n'.join(results))
-                    
-                    # Enable the Apply to Template button
-                    apply_button.setEnabled(True)
-                    
-                    # Update PDF view with highlights if enabled
-                    if highlight_check.isChecked():
-                        self.update_pdf_highlights(matches, non_matches, section, include_matches)
-                        
-                except Exception as e:
-                    results_text.setText(f"Error testing pattern: {str(e)}")
-                    print(f"Error in on_test_clicked: {str(e)}")
-                    import traceback
-                    traceback.print_exc()
-            
-            def on_highlight_toggled(checked):
-                if checked and current_matches:
-                    self.update_pdf_highlights(current_matches, current_non_matches, section, include_matches_check.isChecked())
-                else:
-                    # Reset to original view
-                    self.load_pdf()
-            
-            def on_apply_to_template():
-                try:
-                    print("\nApplying pattern to template...")
-                    pattern = pattern_input.text().strip()
-                    p_type = pattern_type_combo.currentText().lower()
-                    include_matches = include_matches_check.isChecked()
-                    
-                    print(f"Pattern: {pattern}")
-                    print(f"Type: {p_type}")
-                    print(f"Include matches: {include_matches}")
-                    
-                    # Make sure extraction_params and regex_patterns exist
-                    if not hasattr(self, 'extraction_params'):
-                        self.extraction_params = {'header': {}, 'items': {}, 'summary': {}}
-                    
-                    if 'regex_patterns' not in self.extraction_params:
-                        self.extraction_params['regex_patterns'] = {'header': {}, 'items': {}, 'summary': {}}
-                    
-                    if section not in self.extraction_params['regex_patterns']:
-                        self.extraction_params['regex_patterns'][section] = {}
-                    
-                    # Save the pattern and include/exclude preference
-                    self.extraction_params['regex_patterns'][section][p_type] = pattern
-                    self.extraction_params['regex_patterns'][section]['include_matches'] = include_matches
-                    
-                    print("Extraction parameters updated")
-                    
-                    # Update the results text to show the pattern was saved
-                    results_text.append(f"\nPattern saved as {p_type} pattern!")
-                    results_text.append("You can now set another pattern type (start/end/skip) or click Close when done.")
-                    
-                    # Clear the pattern input for the next pattern
-                    pattern_input.clear()
-                    
-                    # Don't close the dialog - let user set more patterns
-                    
-                except Exception as e:
-                    print(f"Error in on_apply_to_template: {str(e)}")
-                    import traceback
-                    traceback.print_exc()
-                    results_text.setText(f"Error applying pattern: {str(e)}")
-                    # Don't close the dialog on error
-                    return False
-            
-            # Connect button signals
-            test_button.clicked.connect(on_test_clicked)
-            apply_button.clicked.connect(on_apply_to_template)
-            highlight_check.toggled.connect(on_highlight_toggled)
-            close_button.clicked.connect(lambda: on_close())
-            
-            # Also connect Enter key in regex input to test button
-            pattern_input.returnPressed.connect(on_test_clicked)
-            
-            # Show the dialog
-            dialog.exec()
-            
-        except Exception as e:
-            print(f"Error showing regex test dialog: {str(e)}")
-            import traceback
-            traceback.print_exc()
-
-    def test_regex_pattern(self, pattern, section, pattern_type):
-        """Test a regex pattern against the current section data"""
-        matches = []
-        non_matches = []
-        error = None
-        
-        try:
-            print(f"\n=== Starting regex pattern test ===")
-            print(f"Pattern: {pattern}")
-            print(f"Section: {section}")
-            print(f"Pattern Type: {pattern_type}")
-            
-            # Validate the regex pattern
-            try:
-                re.compile(pattern)
-                print("Regex pattern validation successful")
-            except re.error as e:
-                print(f"Regex pattern validation failed: {str(e)}")
-                return [], [], f"Invalid regex pattern: {str(e)}"
-            
-            # Get the data for this section
-            current_page_data = self.all_pages_data[self.current_page - 1]
-            section_data = current_page_data[section]
-            
-            if section_data is None:
-                print("No data available for this section")
-                return [], [], "No data available for this section"
-            
-            print(f"Section data type: {type(section_data)}")
-            if isinstance(section_data, list):
-                print(f"Number of tables in section: {len(section_data)}")
-            else:
-                print(f"Single table with shape: {section_data.shape}")
-            
-            # Process the data for matching
-            if isinstance(section_data, list):
-                # Multiple tables
-                for table_idx, df in enumerate(section_data):
-                    print(f"\nProcessing table {table_idx + 1}")
-                    if df is None or df.empty:
-                        print(f"Table {table_idx + 1} is empty or None, skipping")
-                        continue
-                    
-                    print(f"Table {table_idx + 1} shape: {df.shape}")
-                    
-                    # For each table, process according to the pattern type
-                    if pattern_type == 'start':
-                        print("Processing as start pattern")
-                        # Find the first match in this table
-                        first_match_idx = None
-                        for row_idx, row in df.iterrows():
-                            try:
-                                row_text = " ".join([str(val) for val in row if pd.notna(val)])
-                                if re.search(pattern, row_text, re.IGNORECASE):
-                                    if first_match_idx is None:
-                                        first_match_idx = row_idx
-                                        print(f"Found first match at row {row_idx}")
-                                    matches.append((table_idx, row_idx, row_text, row_idx == first_match_idx))
-                                else:
-                                    non_matches.append((table_idx, row_idx, row_text, False))
-                            except Exception as row_e:
-                                print(f"Error processing row {row_idx}: {str(row_e)}")
-                                continue
-                    
-                    elif pattern_type == 'end':
-                        print("Processing as end pattern")
-                        # First find a simulated 'start' - either first row or first matching row
-                        start_idx = df.index[0] if len(df.index) > 0 else None
-                        print(f"Start index: {start_idx}")
-                        
-                        # Then find first match after start
-                        first_match_after_start = None
-                        for row_idx, row in df.iterrows():
-                            try:
-                                row_text = " ".join([str(val) for val in row if pd.notna(val)])
-                                # Only consider rows after start
-                                if start_idx is not None and row_idx >= start_idx:
-                                    if re.search(pattern, row_text, re.IGNORECASE):
-                                        if first_match_after_start is None:
-                                            first_match_after_start = row_idx
-                                            print(f"Found first match after start at row {row_idx}")
-                                        matches.append((table_idx, row_idx, row_text, row_idx == first_match_after_start))
-                                    else:
-                                        non_matches.append((table_idx, row_idx, row_text, False))
-                            except Exception as row_e:
-                                print(f"Error processing row {row_idx}: {str(row_e)}")
-                                continue
-                    
-                    elif pattern_type == 'skip':
-                        print("Processing as skip pattern")
-                        # All matches should be excluded
-                        for row_idx, row in df.iterrows():
-                            try:
-                                row_text = " ".join([str(val) for val in row if pd.notna(val)])
-                                if re.search(pattern, row_text, re.IGNORECASE):
-                                    matches.append((table_idx, row_idx, row_text, True))  # True means it will be skipped
-                                else:
-                                    non_matches.append((table_idx, row_idx, row_text, False))
-                            except Exception as row_e:
-                                print(f"Error processing row {row_idx}: {str(row_e)}")
-                                continue
-                    
-                    else:  # Default case - just match all
-                        print("Processing as default pattern")
-                        for row_idx, row in df.iterrows():
-                            try:
-                                row_text = " ".join([str(val) for val in row if pd.notna(val)])
-                                if re.search(pattern, row_text, re.IGNORECASE):
-                                    matches.append((table_idx, row_idx, row_text, True))
-                                else:
-                                    non_matches.append((table_idx, row_idx, row_text, False))
-                            except Exception as row_e:
-                                print(f"Error processing row {row_idx}: {str(row_e)}")
-                                continue
-            else:
-                print("\nProcessing single table")
-                # Single table - similar logic as above but for a single table
-                if not section_data.empty:
-                    print(f"Table shape: {section_data.shape}")
-                    if pattern_type == 'start':
-                        print("Processing as start pattern")
-                        # Find the first match
-                        first_match_idx = None
-                        for row_idx, row in section_data.iterrows():
-                            try:
-                                row_text = " ".join([str(val) for val in row if pd.notna(val)])
-                                if re.search(pattern, row_text, re.IGNORECASE):
-                                    if first_match_idx is None:
-                                        first_match_idx = row_idx
-                                        print(f"Found first match at row {row_idx}")
-                                    matches.append((0, row_idx, row_text, row_idx == first_match_idx))
-                                else:
-                                    non_matches.append((0, row_idx, row_text, False))
-                            except Exception as row_e:
-                                print(f"Error processing row {row_idx}: {str(row_e)}")
-                                continue
-                    
-                    elif pattern_type == 'end':
-                        print("Processing as end pattern")
-                        # First find a simulated 'start' - either first row or first matching row
-                        start_idx = section_data.index[0] if len(section_data.index) > 0 else None
-                        print(f"Start index: {start_idx}")
-                        
-                        # Then find first match after start
-                        first_match_after_start = None
-                        for row_idx, row in section_data.iterrows():
-                            try:
-                                row_text = " ".join([str(val) for val in row if pd.notna(val)])
-                                # Only consider rows after start
-                                if start_idx is not None and row_idx >= start_idx:
-                                    if re.search(pattern, row_text, re.IGNORECASE):
-                                        if first_match_after_start is None:
-                                            first_match_after_start = row_idx
-                                            print(f"Found first match after start at row {row_idx}")
-                                        matches.append((0, row_idx, row_text, row_idx == first_match_after_start))
-                                    else:
-                                        non_matches.append((0, row_idx, row_text, False))
-                            except Exception as row_e:
-                                print(f"Error processing row {row_idx}: {str(row_e)}")
-                                continue
-                    
-                    elif pattern_type == 'skip':
-                        print("Processing as skip pattern")
-                        # All matches should be excluded
-                        for row_idx, row in section_data.iterrows():
-                            try:
-                                row_text = " ".join([str(val) for val in row if pd.notna(val)])
-                                if re.search(pattern, row_text, re.IGNORECASE):
-                                    matches.append((0, row_idx, row_text, True))  # True means it will be skipped
-                                else:
-                                    non_matches.append((0, row_idx, row_text, False))
-                            except Exception as row_e:
-                                print(f"Error processing row {row_idx}: {str(row_e)}")
-                                continue
-                    
-                    else:  # Default case - just match all
-                        print("Processing as default pattern")
-                        for row_idx, row in section_data.iterrows():
-                            try:
-                                row_text = " ".join([str(val) for val in row if pd.notna(val)])
-                                if re.search(pattern, row_text, re.IGNORECASE):
-                                    matches.append((0, row_idx, row_text, True))
-                                else:
-                                    non_matches.append((0, row_idx, row_text, False))
-                            except Exception as row_e:
-                                print(f"Error processing row {row_idx}: {str(row_e)}")
-                                continue
-                else:
-                    print("Single table is empty")
-            
-            print(f"\nTest results:")
-            print(f"Total matches found: {len(matches)}")
-            print(f"Total non-matches: {len(non_matches)}")
-            
-            return matches, non_matches, error
-            
-        except Exception as e:
-            print(f"Error in test_regex_pattern: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return [], [], f"Error testing pattern: {str(e)}"
-
-    def update_pdf_highlights(self, matches, non_matches, section, include_matches=True):
-        """Update the PDF display with highlights for regex matches and non-matches"""
-        try:
-            print(f"\nUpdating PDF highlights for {section} section")
-            print(f"Matches: {len(matches)}, Non-matches: {len(non_matches)}")
-            print(f"Include matches: {include_matches}")
-            
-            # Get current page
-            page = self.pdf_document[self.current_page - 1]
-            
-            # Get actual page dimensions in points (1/72 inch)
-            page_width = page.mediabox.width
-            page_height = page.mediabox.height
-            
-            # Get the rendered dimensions
-            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
-            rendered_width = pix.width
-            rendered_height = pix.height
-            
-            # Calculate scaling factors
-            scale_x = page_width / rendered_width
-            scale_y = page_height / rendered_height
-            
-            # Get current page's regions
-            current_regions = self.regions
-            if isinstance(self.regions, dict) and (self.current_page - 1) in self.regions:
-                current_regions = self.regions[self.current_page - 1]
-            
-            # Get regions for this section
-            if section in current_regions and current_regions[section]:
-                section_regions = current_regions[section]
-                
-                # Process each region
-                for i, region in enumerate(section_regions):
-                    print(f"\nProcessing region {i+1} of {section}")
-                    
-                    # Convert region coordinates to PDF space
-                    x1 = region.x() * scale_x
-                    y1 = page_height - (region.y() * scale_y)
-                    x2 = (region.x() + region.width()) * scale_x
-                    y2 = page_height - ((region.y() + region.height()) * scale_y)
-                    
-                    # Get text blocks in this region
-                    blocks = page.get_text("dict")["blocks"]
-                    for block in blocks:
-                        if "lines" not in block:
-                            continue
-                            
-                        for line in block["lines"]:
-                            if "spans" not in line:
-                                continue
-                                
-                            for span in line["spans"]:
-                                # Get span coordinates
-                                span_x = span["origin"][0]
-                                span_y = span["origin"][1]
-                                span_text = span["text"]
-                                
-                                # Check if span is within region
-                                if (x1 <= span_x <= x2 and y1 <= span_y <= y2):
-                                    # Check if this text matches any of our patterns
-                                    is_match = False
-                                    for idx, text in matches:
-                                        if span_text in text:
-                                            is_match = True
-                                            break
-                                    
-                                    # Draw highlight based on match handling preference
-                                    if is_match:
-                                        if include_matches:
-                                            # Green highlight for included matches
-                                            highlight = page.draw_rect(
-                                                fitz.Rect(span_x - 2, span_y - 2, 
-                                                        span_x + span["bbox"][2] - span["bbox"][0] + 2,
-                                                        span_y + span["bbox"][3] - span["bbox"][1] + 2),
-                                                color=(0, 1, 0, 0.3)  # Semi-transparent green
-                                            )
-                                        else:
-                                            # Red highlight for excluded matches
-                                            highlight = page.draw_rect(
-                                                fitz.Rect(span_x - 2, span_y - 2,
-                                                        span_x + span["bbox"][2] - span["bbox"][0] + 2,
-                                                        span_y + span["bbox"][3] - span["bbox"][1] + 2),
-                                                color=(1, 0, 0, 0.3)  # Semi-transparent red
-                                            )
-                                    else:
-                                        if include_matches:
-                                            # Red highlight for non-matches when including matches
-                                            highlight = page.draw_rect(
-                                                fitz.Rect(span_x - 2, span_y - 2,
-                                                        span_x + span["bbox"][2] - span["bbox"][0] + 2,
-                                                        span_y + span["bbox"][3] - span["bbox"][1] + 2),
-                                                color=(1, 0, 0, 0.3)  # Semi-transparent red
-                                            )
-                                        else:
-                                            # Green highlight for included non-matches when excluding matches
-                                            highlight = page.draw_rect(
-                                                fitz.Rect(span_x - 2, span_y - 2,
-                                                        span_x + span["bbox"][2] - span["bbox"][0] + 2,
-                                                        span_y + span["bbox"][3] - span["bbox"][1] + 2),
-                                                color=(0, 1, 0, 0.3)  # Semi-transparent green
-                                            )
-            
-            # Update the PDF display
-            self.load_pdf()
-            print("PDF highlights updated")
-            
-        except Exception as e:
-            print(f"Error updating PDF highlights: {str(e)}")
-            import traceback
-            traceback.print_exc()
 
     def show_json_view(self):
         """Show the extracted data in JSON format"""
@@ -2659,88 +1642,3 @@ class MultiPageSectionViewer(QWidget):
             print(f"Error downloading JSON: {str(e)}")
             import traceback
             traceback.print_exc()
-
-    def apply_regex_patterns_to_df(self, df, section):
-        """Apply regex patterns to filter DataFrame content"""
-        try:
-            if df is None or df.empty:
-                return df
-
-            # Get patterns for this section
-            if not hasattr(self, 'extraction_params') or 'regex_patterns' not in self.extraction_params:
-                return df
-            
-            patterns = self.extraction_params['regex_patterns'].get(section, {})
-            if not patterns:
-                return df
-
-            # Get include/exclude preference
-            include_matches = patterns.get('include_matches', True)
-            
-            # Create a copy of the DataFrame to work with
-            result_df = df.copy()
-            
-            # Create a mask for each pattern type
-            start_mask = pd.Series(False, index=result_df.index)
-            end_mask = pd.Series(False, index=result_df.index)
-            skip_mask = pd.Series(False, index=result_df.index)
-            
-            # Function to get text from row
-            def get_row_text(row):
-                return " ".join([str(val) for val in row if pd.notna(val)])
-            
-            # Process start pattern
-            if 'start' in patterns and patterns['start']:
-                pattern = patterns['start']
-                first_match_found = False
-                for idx, row in result_df.iterrows():
-                    row_text = get_row_text(row)
-                    if re.search(pattern, row_text, re.IGNORECASE):
-                        if not first_match_found:
-                            first_match_found = True
-                            start_mask.loc[idx:] = True
-                        
-            # Process end pattern
-            if 'end' in patterns and patterns['end']:
-                pattern = patterns['end']
-                first_match_found = False
-                for idx, row in result_df.iterrows():
-                    row_text = get_row_text(row)
-                    if re.search(pattern, row_text, re.IGNORECASE):
-                        if not first_match_found:
-                            first_match_found = True
-                            end_mask.loc[:idx] = True
-            
-            # Process skip pattern
-            if 'skip' in patterns and patterns['skip']:
-                pattern = patterns['skip']
-                for idx, row in result_df.iterrows():
-                    row_text = get_row_text(row)
-                    if re.search(pattern, row_text, re.IGNORECASE):
-                        skip_mask.loc[idx] = True
-            
-            # Combine masks based on pattern types present
-            final_mask = pd.Series(True, index=result_df.index)
-            
-            if 'start' in patterns and patterns['start']:
-                final_mask &= start_mask
-            
-            if 'end' in patterns and patterns['end']:
-                final_mask &= end_mask
-            
-            if 'skip' in patterns and patterns['skip']:
-                final_mask &= ~skip_mask
-            
-            # Apply the mask based on include/exclude preference
-            if include_matches:
-                result_df = result_df[final_mask]
-            else:
-                result_df = result_df[~final_mask]
-            
-            return result_df
-            
-        except Exception as e:
-            print(f"Error applying regex patterns to DataFrame: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return df

@@ -187,8 +187,8 @@ class ValidationScreen(QWidget):
         actions_layout.addWidget(clear_rules_btn)
         left_layout.addLayout(actions_layout)
         
-        # Add Save/Load Rules buttons if this is rules manager
-        if self.is_rules_manager:
+        # Add Save/Load Rules buttons if this is rules manager or in bulk processor
+        if self.is_rules_manager or hasattr(self.parent, 'get_selected_template_id'):
             rules_actions_layout = QHBoxLayout()
             
             save_rules_btn = QPushButton("Save Rules")
@@ -220,6 +220,24 @@ class ValidationScreen(QWidget):
                     background-color: #0F172A;
                 }}
             """)
+
+            # Add button to save rules to the template
+            if hasattr(self.parent, 'get_selected_template_id'):
+                save_to_template_btn = QPushButton("Save Rules to Template")
+                save_to_template_btn.clicked.connect(self.save_rules_to_template)
+                save_to_template_btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background-color: {self.theme['primary']};
+                        color: white;
+                        padding: 8px 16px;
+                        border-radius: 6px;
+                        font-weight: bold;
+                    }}
+                    QPushButton:hover {{
+                        background-color: {self.theme['primary_dark']};
+                    }}
+                """)
+                rules_actions_layout.addWidget(save_to_template_btn)
             
             rules_actions_layout.addWidget(save_rules_btn)
             rules_actions_layout.addWidget(load_rules_btn)
@@ -557,4 +575,82 @@ class ValidationScreen(QWidget):
         df = pd.DataFrame([sample_data])
         
         # Set as current data
-        self.set_data(df) 
+        self.set_data(df)
+    
+    def save_rules_to_template(self):
+        """Save validation rules to the current template"""
+        if not self.validation_rules:
+            QMessageBox.warning(self, "Warning", "No rules to save to template")
+            return
+            
+        # Check if parent is BulkProcessor
+        if not hasattr(self.parent, 'get_selected_template_id'):
+            QMessageBox.warning(self, "Warning", "Cannot save to template: invalid parent")
+            return
+            
+        # Get selected template ID
+        template_id = self.parent.get_selected_template_id()
+        if not template_id:
+            QMessageBox.warning(self, "Warning", "No template selected")
+            return
+            
+        try:
+            # Connect to database
+            import sqlite3
+            conn = sqlite3.connect("invoice_templates.db")
+            cursor = conn.cursor()
+            
+            # Check if validation_rules column exists
+            cursor.execute("PRAGMA table_info(templates)")
+            columns = cursor.fetchall()
+            column_names = [col[1] for col in columns]
+            
+            if "validation_rules" not in column_names:
+                result = QMessageBox.question(
+                    self,
+                    "Add Validation Rules Column",
+                    "The validation_rules column does not exist in the templates table. Do you want to add it?",
+                    QMessageBox.Yes | QMessageBox.No
+                )
+                
+                if result == QMessageBox.Yes:
+                    # Add the column
+                    cursor.execute("ALTER TABLE templates ADD COLUMN validation_rules TEXT")
+                    conn.commit()
+                    print("Added validation_rules column to templates table")
+                else:
+                    conn.close()
+                    return
+            
+            # Get the template name
+            cursor.execute("SELECT name FROM templates WHERE id = ?", (template_id,))
+            template_name = cursor.fetchone()[0]
+            
+            # Convert rules to serializable format
+            serialized_rules = {}
+            for field, rules in self.validation_rules.items():
+                serialized_rules[field] = []
+                for rule in rules:
+                    serialized_rules[field].append({
+                        "type": rule["type"],
+                        "params": rule["params"]
+                    })
+            
+            # Save to database
+            cursor.execute(
+                "UPDATE templates SET validation_rules = ? WHERE id = ?",
+                (json.dumps(serialized_rules), template_id)
+            )
+            conn.commit()
+            conn.close()
+                
+            QMessageBox.information(
+                self, 
+                "Success", 
+                f"Rules saved successfully to template '{template_name}'\n\n"
+                f"These rules will be applied when validating data extracted with this template."
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error saving rules to template: {str(e)}")
+            import traceback
+            traceback.print_exc() 

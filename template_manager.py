@@ -152,6 +152,9 @@ class EditTemplateDialog(QDialog):
         self.page_count = template_data.get('page_count', 1) if template_data else 1
         self.current_page = 0
         
+        # Initialize validation rules
+        self.validation_rules = template_data.get('validation_rules', {}) if template_data else {}
+        
         # Set global style for this dialog
         self.setStyleSheet("""
             QDialog {
@@ -213,6 +216,7 @@ class EditTemplateDialog(QDialog):
         tab_widget.addTab(self.create_regions_tab(), "Table Regions")
         tab_widget.addTab(self.create_columns_tab(), "Column Lines")
         tab_widget.addTab(self.create_config_tab(), "Configuration")
+        tab_widget.addTab(self.create_validation_tab(), "Validation Rules")
         
         main_layout.addWidget(tab_widget)
         
@@ -454,7 +458,7 @@ class EditTemplateDialog(QDialog):
         return tab
     
     def create_config_tab(self):
-        """Create the configuration tab with extraction parameters and regex patterns"""
+        """Create the configuration tab with extraction parameters"""
         tab = QWidget()
         main_layout = QVBoxLayout(tab)
         main_layout.setSpacing(16)
@@ -589,101 +593,6 @@ class EditTemplateDialog(QDialog):
         extraction_group.setLayout(extraction_layout)
         main_layout.addWidget(extraction_group)
         
-        # 2. Regex Patterns Section
-        regex_group = QGroupBox("Regex Patterns")
-        regex_layout = QVBoxLayout()
-        
-        # Get existing patterns if available
-        regex_patterns = {}
-        
-        # First check for regex_patterns in extraction_params
-        if 'regex_patterns' in extraction_params:
-            regex_patterns = extraction_params.get('regex_patterns', {})
-            print("Found regex_patterns in extraction_params")
-        # Then check for regex_patterns directly in config
-        elif 'regex_patterns' in config:
-            regex_patterns = config.get('regex_patterns', {})
-            print("Found regex_patterns directly in config")
-        
-        # Create tabs for different sections
-        regex_tabs = QTabWidget()
-        
-        # Header patterns
-        header_tab = QWidget()
-        header_layout = QFormLayout(header_tab)
-        
-        header_patterns = regex_patterns.get('header', {})
-        self.header_start_pattern = QLineEdit()
-        self.header_start_pattern.setText(header_patterns.get('start', ''))
-        self.header_start_pattern.setToolTip("Pattern to identify the start of the header section")
-        header_layout.addRow("Start Pattern:", self.header_start_pattern)
-        
-        self.header_end_pattern = QLineEdit()
-        self.header_end_pattern.setText(header_patterns.get('end', ''))
-        self.header_end_pattern.setToolTip("Pattern to identify the end of the header section")
-        header_layout.addRow("End Pattern:", self.header_end_pattern)
-        
-        self.header_skip_pattern = QLineEdit()
-        self.header_skip_pattern.setText(header_patterns.get('skip', ''))
-        self.header_skip_pattern.setToolTip("Pattern to identify rows to skip in the header section")
-        header_layout.addRow("Skip Pattern:", self.header_skip_pattern)
-        
-        regex_tabs.addTab(header_tab, "Header")
-        
-        # Items patterns
-        items_tab = QWidget()
-        items_layout = QFormLayout(items_tab)
-        
-        items_patterns = regex_patterns.get('items', {})
-        self.items_start_pattern = QLineEdit()
-        self.items_start_pattern.setText(items_patterns.get('start', ''))
-        self.items_start_pattern.setToolTip("Pattern to identify the start of the items section")
-        items_layout.addRow("Start Pattern:", self.items_start_pattern)
-        
-        self.items_end_pattern = QLineEdit()
-        self.items_end_pattern.setText(items_patterns.get('end', ''))
-        self.items_end_pattern.setToolTip("Pattern to identify the end of the items section")
-        items_layout.addRow("End Pattern:", self.items_end_pattern)
-        
-        self.items_skip_pattern = QLineEdit()
-        self.items_skip_pattern.setText(items_patterns.get('skip', ''))
-        self.items_skip_pattern.setToolTip("Pattern to identify rows to skip in the items section")
-        items_layout.addRow("Skip Pattern:", self.items_skip_pattern)
-        
-        regex_tabs.addTab(items_tab, "Items")
-        
-        # Summary patterns
-        summary_tab = QWidget()
-        summary_layout = QFormLayout(summary_tab)
-        
-        summary_patterns = regex_patterns.get('summary', {})
-        self.summary_start_pattern = QLineEdit()
-        self.summary_start_pattern.setText(summary_patterns.get('start', ''))
-        self.summary_start_pattern.setToolTip("Pattern to identify the start of the summary section")
-        summary_layout.addRow("Start Pattern:", self.summary_start_pattern)
-        
-        self.summary_end_pattern = QLineEdit()
-        self.summary_end_pattern.setText(summary_patterns.get('end', ''))
-        self.summary_end_pattern.setToolTip("Pattern to identify the end of the summary section")
-        summary_layout.addRow("End Pattern:", self.summary_end_pattern)
-        
-        self.summary_skip_pattern = QLineEdit()
-        self.summary_skip_pattern.setText(summary_patterns.get('skip', ''))
-        self.summary_skip_pattern.setToolTip("Pattern to identify rows to skip in the summary section")
-        summary_layout.addRow("Skip Pattern:", self.summary_skip_pattern)
-        
-        regex_tabs.addTab(summary_tab, "Summary")
-        
-        regex_layout.addWidget(regex_tabs)
-        regex_group.setLayout(regex_layout)
-        main_layout.addWidget(regex_group)
-        
-        # Add help text
-        help_label = QLabel("Regex patterns allow fine-tuning the extraction process. Leave empty if not needed.")
-        help_label.setWordWrap(True)
-        help_label.setStyleSheet("color: #666; font-style: italic;")
-        main_layout.addWidget(help_label)
-        
         # Add a debug section to show the actual config structure
         debug_btn = QPushButton("Show Raw Config")
         debug_btn.setToolTip("Show the raw configuration structure for debugging")
@@ -694,137 +603,133 @@ class EditTemplateDialog(QDialog):
         
         return tab
 
-    def clone_column_lines_to_another_page(self):
-        """Clone column lines from the current page to another page"""
-        if self.template_data.get("template_type") != "multi" or self.page_count <= 1:
-            return
-            
-        # Get current page column lines
-        current_column_lines = self.get_column_lines_for_current_page()
-        if not current_column_lines or not any(current_column_lines.values()):
-            QMessageBox.warning(
-                self,
-                "No Column Lines to Clone",
-                "There are no column lines defined on the current page to clone.",
-                QMessageBox.Ok
-            )
-            return
-            
-        # Create a dialog to select the target page
-        target_pages = []
-        for i in range(self.page_count):
-            if i != self.current_page:  # Exclude current page
-                target_pages.append(f"Page {i + 1}")
-                
-        if not target_pages:
-            QMessageBox.warning(
-                self,
-                "No Target Pages",
-                "There are no other pages to clone column lines to.",
-                QMessageBox.Ok
-            )
-            return
-            
-        # Create dialog for selecting target page and options
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Clone Column Lines to Another Page")
-        dialog.setMinimumWidth(400)
+    def create_validation_tab(self):
+        """Create the validation rules tab"""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setSpacing(20)
         
-        dialog_layout = QVBoxLayout()
-        
-        # Explanation
-        explanation = QLabel("Select the page(s) to clone the current column lines to:")
+        # Add explanation
+        explanation = QLabel("Define validation rules for extracted data fields. These rules will be applied during the validation process.")
         explanation.setWordWrap(True)
-        dialog_layout.addWidget(explanation)
+        explanation.setStyleSheet("color: #666;")
+        layout.addWidget(explanation)
         
-        # Target page selection
-        page_list = QListWidget()
-        for page in target_pages:
-            item = QListWidgetItem(page)
-            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-            item.setCheckState(Qt.Unchecked)
-            page_list.addItem(item)
-        dialog_layout.addWidget(page_list)
+        # Create validation rules table
+        self.validation_table = QTableWidget()
+        self.validation_table.setColumnCount(3)
+        self.validation_table.setHorizontalHeaderLabels(["Field", "Rule Type", "Parameters"])
+        self.validation_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.validation_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.validation_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
         
-        # Options
-        options_group = QGroupBox("Options")
-        options_layout = QVBoxLayout()
+        # Load existing validation rules if available
+        if self.validation_rules:
+            for field, rules in self.validation_rules.items():
+                for rule in rules:
+                    row = self.validation_table.rowCount()
+                    self.validation_table.insertRow(row)
+                    self.validation_table.setItem(row, 0, QTableWidgetItem(field))
+                    self.validation_table.setItem(row, 1, QTableWidgetItem(rule.get("type", "")))
+                    self.validation_table.setItem(row, 2, QTableWidgetItem(rule.get("params", "")))
         
-        replace_option = QCheckBox("Replace existing column lines on target page(s)")
-        replace_option.setChecked(True)
-        options_layout.addWidget(replace_option)
+        layout.addWidget(self.validation_table)
         
-        options_group.setLayout(options_layout)
-        dialog_layout.addWidget(options_group)
+        # Add controls for adding new rules
+        form_layout = QFormLayout()
         
-        # Buttons
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(dialog.accept)
-        buttons.rejected.connect(dialog.reject)
-        dialog_layout.addWidget(buttons)
+        self.field_input = QLineEdit()
+        self.field_input.setPlaceholderText("Field name (e.g., header_invoice_number)")
         
-        dialog.setLayout(dialog_layout)
+        self.rule_type_combo = QComboBox()
+        self.rule_type_combo.addItems([
+            "Required",
+            "Numeric",
+            "Date",
+            "Email",
+            "Custom Regex"
+        ])
         
-        # Show dialog and process result
-        if dialog.exec() == QDialog.Accepted:
-            # Get selected pages
-            selected_pages = []
-            for i in range(page_list.count()):
-                item = page_list.item(i)
-                if item.checkState() == Qt.Checked:
-                    # Convert from display name "Page X" to 0-based index
-                    page_idx = int(item.text().split(" ")[1]) - 1
-                    selected_pages.append(page_idx)
-            
-            if not selected_pages:
-                QMessageBox.warning(
-                    self,
-                    "No Pages Selected",
-                    "No target pages were selected. The operation was cancelled.",
-                    QMessageBox.Ok
-                )
-                return
-            
-            # Apply cloning to each selected page
-            replace_existing = replace_option.isChecked()
-            cloned_to = []
-            
-            # Make sure page_column_lines is initialized
-            if 'page_column_lines' not in self.template_data:
-                self.template_data['page_column_lines'] = [{}] * self.page_count
-            
-            # Extend page_column_lines if needed
-            while len(self.template_data['page_column_lines']) < self.page_count:
-                self.template_data['page_column_lines'].append({})
-            
-            for page_idx in selected_pages:
-                # If replace is checked, or if the target page has no column lines
-                if replace_existing or not self.template_data['page_column_lines'][page_idx]:
-                    # Create a deep copy of the current column lines
-                    import copy
-                    self.template_data['page_column_lines'][page_idx] = copy.deepcopy(current_column_lines)
-                    cloned_to.append(page_idx + 1)  # Convert to 1-based for display
-                else:
-                    # Merge column lines (add to existing)
-                    target_column_lines = self.template_data['page_column_lines'][page_idx]
-                    for section, lines in current_column_lines.items():
-                        if section not in target_column_lines:
-                            target_column_lines[section] = []
-                        target_column_lines[section].extend(copy.deepcopy(lines))
-                    cloned_to.append(page_idx + 1)  # Convert to 1-based for display
-            
-            # Show success message
-            success_message = f"Column lines cloned successfully to page(s): {', '.join(map(str, cloned_to))}"
-            QMessageBox.information(
-                self,
-                "Column Lines Cloned",
-                success_message,
-                QMessageBox.Ok
-            )
-            
-            # If current page is one of the target pages, refresh the view
-            if self.current_page in selected_pages:
-                self.load_column_lines_for_current_page()
+        self.rule_params_input = QLineEdit()
+        self.rule_params_input.setPlaceholderText("Enter parameters (if needed)")
+        
+        form_layout.addRow("Field:", self.field_input)
+        form_layout.addRow("Rule Type:", self.rule_type_combo)
+        form_layout.addRow("Parameters:", self.rule_params_input)
+        
+        layout.addLayout(form_layout)
+        
+        # Buttons for adding and removing rules
+        button_layout = QHBoxLayout()
+        
+        add_rule_btn = QPushButton("Add Rule")
+        add_rule_btn.clicked.connect(self.add_validation_rule)
+        add_rule_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4169E1;
+                color: white;
+                padding: 8px 16px;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #3158D3;
+            }
+        """)
+        
+        remove_rule_btn = QPushButton("Remove Selected")
+        remove_rule_btn.clicked.connect(self.remove_validation_rule)
+        remove_rule_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #EF4444;
+                color: white;
+                padding: 8px 16px;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #DC2626;
+            }
+        """)
+        
+        button_layout.addWidget(add_rule_btn)
+        button_layout.addWidget(remove_rule_btn)
+        button_layout.addStretch()
+        
+        layout.addLayout(button_layout)
+        
+        return tab
+    
+    def add_validation_rule(self):
+        """Add a new validation rule to the table"""
+        field = self.field_input.text().strip()
+        rule_type = self.rule_type_combo.currentText()
+        params = self.rule_params_input.text().strip()
+        
+        if not field:
+            QMessageBox.warning(self, "Warning", "Please enter a field name")
+            return
+        
+        # Add to table
+        row = self.validation_table.rowCount()
+        self.validation_table.insertRow(row)
+        self.validation_table.setItem(row, 0, QTableWidgetItem(field))
+        self.validation_table.setItem(row, 1, QTableWidgetItem(rule_type))
+        self.validation_table.setItem(row, 2, QTableWidgetItem(params))
+        
+        # Clear inputs
+        self.field_input.clear()
+        self.rule_params_input.clear()
+    
+    def remove_validation_rule(self):
+        """Remove the selected validation rule"""
+        selected_rows = self.validation_table.selectionModel().selectedRows()
+        if not selected_rows:
+            return
+        
+        # Remove rows in reverse order to avoid index issues
+        for row in sorted([index.row() for index in selected_rows], reverse=True):
+            self.validation_table.removeRow(row)
 
     def on_template_type_changed(self, template_type):
         """Handle template type change"""
@@ -1143,6 +1048,23 @@ class EditTemplateDialog(QDialog):
         
         # Get configuration data
         template_data['config'] = self.get_config_data()
+        
+        # Get validation rules from table
+        validation_rules = {}
+        for row in range(self.validation_table.rowCount()):
+            field = self.validation_table.item(row, 0).text().strip()
+            rule_type = self.validation_table.item(row, 1).text().strip()
+            params = self.validation_table.item(row, 2).text().strip()
+            
+            if field not in validation_rules:
+                validation_rules[field] = []
+            
+            validation_rules[field].append({
+                "type": rule_type,
+                "params": params
+            })
+        
+        template_data["validation_rules"] = validation_rules
         
         # Ensure we have valid data before returning
         try:
@@ -1597,6 +1519,138 @@ class EditTemplateDialog(QDialog):
             print(f"Error showing raw config: {e}")
             import traceback
             traceback.print_exc()
+
+    def clone_column_lines_to_another_page(self):
+        """Clone column lines from the current page to another page"""
+        if self.template_data.get("template_type") != "multi" or self.page_count <= 1:
+            return
+            
+        # Get current page column lines
+        current_column_lines = self.get_column_lines_for_current_page()
+        if not current_column_lines or not any(current_column_lines.values()):
+            QMessageBox.warning(
+                self,
+                "No Column Lines to Clone",
+                "There are no column lines defined on the current page to clone.",
+                QMessageBox.Ok
+            )
+            return
+            
+        # Create a dialog to select the target page
+        target_pages = []
+        for i in range(self.page_count):
+            if i != self.current_page:  # Exclude current page
+                target_pages.append(f"Page {i + 1}")
+                
+        if not target_pages:
+            QMessageBox.warning(
+                self,
+                "No Target Pages",
+                "There are no other pages to clone column lines to.",
+                QMessageBox.Ok
+            )
+            return
+            
+        # Create dialog for selecting target page and options
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Clone Column Lines to Another Page")
+        dialog.setMinimumWidth(400)
+        
+        dialog_layout = QVBoxLayout()
+        
+        # Explanation
+        explanation = QLabel("Select the page(s) to clone the current column lines to:")
+        explanation.setWordWrap(True)
+        dialog_layout.addWidget(explanation)
+        
+        # Target page selection
+        page_list = QListWidget()
+        for page in target_pages:
+            item = QListWidgetItem(page)
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Unchecked)
+            page_list.addItem(item)
+        dialog_layout.addWidget(page_list)
+        
+        # Options
+        options_group = QGroupBox("Options")
+        options_layout = QVBoxLayout()
+        
+        replace_option = QCheckBox("Replace existing column lines on target page(s)")
+        replace_option.setChecked(True)
+        options_layout.addWidget(replace_option)
+        
+        options_group.setLayout(options_layout)
+        dialog_layout.addWidget(options_group)
+        
+        # Buttons
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        dialog_layout.addWidget(buttons)
+        
+        dialog.setLayout(dialog_layout)
+        
+        # Show dialog and process result
+        if dialog.exec() == QDialog.Accepted:
+            # Get selected pages
+            selected_pages = []
+            for i in range(page_list.count()):
+                item = page_list.item(i)
+                if item.checkState() == Qt.Checked:
+                    # Convert from display name "Page X" to 0-based index
+                    page_idx = int(item.text().split(" ")[1]) - 1
+                    selected_pages.append(page_idx)
+            
+            if not selected_pages:
+                QMessageBox.warning(
+                    self,
+                    "No Pages Selected",
+                    "No target pages were selected. The operation was cancelled.",
+                    QMessageBox.Ok
+                )
+                return
+            
+            # Apply cloning to each selected page
+            replace_existing = replace_option.isChecked()
+            cloned_to = []
+            
+            # Make sure page_column_lines is initialized
+            if 'page_column_lines' not in self.template_data:
+                self.template_data['page_column_lines'] = [{}] * self.page_count
+            
+            # Extend page_column_lines if needed
+            while len(self.template_data['page_column_lines']) < self.page_count:
+                self.template_data['page_column_lines'].append({})
+            
+            for page_idx in selected_pages:
+                # If replace is checked, or if the target page has no column lines
+                if replace_existing or not self.template_data['page_column_lines'][page_idx]:
+                    # Create a deep copy of the current column lines
+                    import copy
+                    self.template_data['page_column_lines'][page_idx] = copy.deepcopy(current_column_lines)
+                    cloned_to.append(page_idx + 1)  # Convert to 1-based for display
+                else:
+                    # Merge column lines (add to existing)
+                    target_column_lines = self.template_data['page_column_lines'][page_idx]
+                    for section, lines in current_column_lines.items():
+                        if section not in target_column_lines:
+                            target_column_lines[section] = []
+                        target_column_lines[section].extend(copy.deepcopy(lines))
+                    cloned_to.append(page_idx + 1)  # Convert to 1-based for display
+            
+            # Show success message
+            success_message = f"Column lines cloned successfully to page(s): {', '.join(map(str, cloned_to))}"
+            QMessageBox.information(
+                self,
+                "Column Lines Cloned",
+                success_message,
+                QMessageBox.Ok
+            )
+            
+            # If current page is one of the target pages, refresh the view
+            if self.current_page in selected_pages:
+                self.load_column_lines_for_current_page()
 
 class TemplateManager(QWidget):
     """Widget for managing invoice templates"""

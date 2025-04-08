@@ -629,7 +629,7 @@ class BulkProcessor(QWidget):
         header.setSectionsMovable(False)
         
         # Set column widths and resize modes
-        column_widths = [250, 150, 100, 150, 150, 150]
+        column_widths = [150, 150, 100, 150, 150, 150]
         for i, width in enumerate(column_widths):
             self.results_table.setColumnWidth(i, width)
             header.setSectionResizeMode(i, QHeaderView.Fixed)  # Fixed width to prevent disappearing
@@ -1543,100 +1543,8 @@ class BulkProcessor(QWidget):
             self, "Screen Reset", "The screen has been reset to its initial state."
         )
     
-    def clean_dataframe(self, df, section, config):
-        """Clean DataFrame using regex patterns to identify table boundaries and filter unwanted rows"""
-        if df is None or df.empty:
-            return df
         
-        # Get regex patterns from config
-        regex_patterns = config.get("regex_patterns", {}).get(section, {})
-        start_pattern = regex_patterns.get("start", None)
-        end_pattern = regex_patterns.get("end", None)
-        skip_pattern = regex_patterns.get("skip", None)
         
-        print(f"Cleaning {section} DataFrame with patterns:")
-        print(f"  Start pattern: {start_pattern}")
-        print(f"  End pattern: {end_pattern}")
-        print(f"  Skip pattern: {skip_pattern}")
-        
-        # Convert DataFrame to string for easier regex matching
-        str_df = df.astype(str)
-        
-        # Apply boundary detection if patterns are provided
-        if start_pattern or end_pattern:
-            start_idx = None
-            end_idx = None
-            
-            # Find start index based on pattern
-            if start_pattern:
-                for idx, row in str_df.iterrows():
-                    row_text = " ".join(row.values)
-                    if re.search(start_pattern, row_text, re.IGNORECASE):
-                        start_idx = idx
-                        print(
-                            f"  Found start row at index {start_idx}: {row_text[:50]}..."
-                        )
-                        break
-                
-                # If start pattern is specified but not found, return empty DataFrame
-                if start_idx is None:
-                    print(f"  Start pattern '{start_pattern}' not found in the data")
-                    return pd.DataFrame()
-            else:
-                # If no start pattern, start from the beginning
-                start_idx = 0
-            
-            # Find end index based on pattern
-            if end_pattern:
-                for idx, row in str_df.loc[start_idx:].iterrows():
-                    row_text = " ".join(row.values)
-                    if re.search(end_pattern, row_text, re.IGNORECASE):
-                        end_idx = idx
-                        print(f"  Found end row at index {end_idx}: {row_text[:50]}...")
-                        break
-                
-                # If end pattern is specified but not found, use the last row
-                if end_idx is None:
-                    end_idx = df.index[-1]
-                    print(
-                        f"  End pattern '{end_pattern}' not found, using last row at index {end_idx}"
-                    )
-            else:
-                # If no end pattern, end at the last row
-                end_idx = df.index[-1]
-            
-            # Slice DataFrame to keep only rows between boundaries (inclusive)
-            df = df.loc[start_idx:end_idx]
-            print(f"  Applied boundary detection: {len(df)} rows remaining")
-        
-        # Filter out rows matching skip pattern
-        if skip_pattern:
-            before_count = len(df)
-            df = df[
-                ~str_df.apply(
-                    lambda row: bool(
-                        re.search(skip_pattern, " ".join(row.values), re.IGNORECASE)
-                    ),
-                    axis=1,
-                )
-            ]
-            skipped = before_count - len(df)
-            print(f"  Skipped {skipped} rows matching pattern")
-        
-        # Basic cleaning - remove empty rows/columns and whitespace
-        df = df.replace(r"^\s*$", pd.NA, regex=True)
-        df = df.dropna(how="all")
-        df = df.dropna(axis=1, how="all")
-        
-        # Clean string values
-        for col in df.columns:
-            if df[col].dtype == object:  # Only clean string columns
-                df[col] = df[col].apply(
-                    lambda x: x.strip() if isinstance(x, str) else x
-                )
-        
-        print(f"  Final DataFrame size: {len(df)} rows, {len(df.columns)} columns")
-        return df
 
     def extract_invoice_tables(self, pdf_path, template_id):
         try:
@@ -2201,111 +2109,6 @@ class BulkProcessor(QWidget):
                                                 axis=1, how="all"
                                             )
 
-                                            # Find applicable regex patterns, if any
-                                            regex_patterns = None
-
-                                            # Check for section-specific regex patterns
-                                            if (
-                                                template_data["template_type"]
-                                                == "multi"
-                                                and "page_configs" in template_data
-                                            ):
-                                                # For multi-page templates, check page-specific config first
-                                                if page_index < len(
-                                                    template_data.get(
-                                                        "page_configs", []
-                                                    )
-                                                ):
-                                                    page_config = template_data[
-                                                        "page_configs"
-                                                    ][page_index]
-                                                    if (
-                                                        section in page_config
-                                                        and "regex_patterns"
-                                                        in page_config[section]
-                                                    ):
-                                                        regex_patterns = page_config[
-                                                            section
-                                                        ]["regex_patterns"]
-                                                        print(
-                                                            f"  Found page-specific regex patterns for {section}"
-                                                        )
-
-                                            # If no page-specific patterns, check section config
-                                            if (
-                                                regex_patterns is None
-                                                and section in config
-                                            ):
-                                                section_config = config[section]
-                                                if "regex_patterns" in section_config:
-                                                    regex_patterns = section_config[
-                                                        "regex_patterns"
-                                                    ]
-                                                    print(
-                                                        f"  Found section-specific regex patterns for {section}"
-                                                    )
-
-                                            # As a fallback, check global regex patterns
-                                            if (
-                                                regex_patterns is None
-                                                and "regex_patterns" in config
-                                            ):
-                                                if section in config["regex_patterns"]:
-                                                    regex_patterns = config[
-                                                        "regex_patterns"
-                                                    ][section]
-                                                    print(
-                                                        f"  Found global regex patterns for {section}"
-                                                    )
-
-                                            # Apply regex patterns only if defined and contain at least one valid pattern
-                                            if regex_patterns:
-                                                # Check if there's at least one non-None pattern
-                                                has_valid_pattern = False
-                                                for pattern_type in [
-                                                    "start",
-                                                    "end",
-                                                    "skip",
-                                                ]:
-                                                    if (
-                                                        pattern_type in regex_patterns
-                                                        and regex_patterns[pattern_type]
-                                                    ):
-                                                        has_valid_pattern = True
-                                                        break
-
-                                                if has_valid_pattern:
-                                                    print(
-                                                        f"  Applying regex patterns to {section} table"
-                                                    )
-                                                    
-                                                    # Save original row count for comparison
-                                                    orig_rows = len(table_df)
-                                                    
-                                                    # Apply patterns
-                                                    table_df, regex_status = self.apply_regex_to_dataframe(
-                                                        table_df, regex_patterns
-                                                    )
-                                                    
-                                                    # Report results with more detailed status information
-                                                    if table_df.empty:
-                                                        print(f"  ⚠️ All rows filtered out by regex patterns! Reason: {regex_status['reason']}")
-                                                    elif regex_status['status'] == 'success':
-                                                        filtered_rows = orig_rows - len(table_df)
-                                                        print(f"  ✅ Successfully filtered {filtered_rows} rows, kept {len(table_df)} rows")
-                                                    elif regex_status['status'] == 'partial':
-                                                        filtered_rows = orig_rows - len(table_df)
-                                                        print(f"  ⚠️ Partially successful: {regex_status['reason']}, kept {len(table_df)} rows")
-                                                    else:
-                                                        print(f"  ❌ Regex application issues: {regex_status['reason']}")
-
-                                                    # Store the regex status in the results for later use
-                                                    if not hasattr(table_df, 'regex_status'):
-                                                        table_df.regex_status = regex_status['status']
-
-                                            else:
-                                                print(f"  No regex patterns defined for {section}, using raw extraction")
-
                                             # Store the table
                                         if not table_df.empty:
                                             if section == "header":
@@ -2343,15 +2146,7 @@ class BulkProcessor(QWidget):
                                                 print(
                                                     f"  ✓ Extracted summary table with {len(table_df)} rows"
                                                 )
-                                            # Track extraction status
-                                            if hasattr(table_df, 'regex_status'):
-                                                results["extraction_status"]["summary"] = table_df.regex_status
-                                            elif not table_df.empty:
-                                                results["extraction_status"]["summary"] = "success"
-                                            else:
-                                                results["extraction_status"]["summary"] = "failed"
-                                        else:
-                                            print(f"  ℹ Table is empty after processing")
+                                           
                                 except Exception as e:
                                     print(f"  ✗ Error extracting table: {str(e)}")
                                     import traceback
@@ -2398,197 +2193,6 @@ class BulkProcessor(QWidget):
             if "pdf_document" in locals():
                 pdf_document.close()
             return None
-
-    def apply_regex_to_dataframe(self, df, regex_patterns):
-        """Apply regex patterns to filter and extract relevant rows from DataFrame"""
-        if df is None or df.empty:
-            print("    ⚠️ DataFrame is None or empty, skipping regex processing")
-            return df, {"status": "failed", "reason": "Empty input data"}
-        
-        if not regex_patterns:
-            print("    ⚠️ No regex patterns provided, skipping regex processing")
-            return df, {"status": "partial", "reason": "No regex patterns"}
-
-        # Get patterns, checking if each one is defined
-        start_pattern = regex_patterns.get("start", None)
-        end_pattern = regex_patterns.get("end", None)
-        skip_pattern = regex_patterns.get("skip", None)
-
-        # Print original row count
-        orig_row_count = len(df)
-        print(f"    Starting with {orig_row_count} rows")
-        
-        # Check for empty strings and set them to None
-        if start_pattern == "":
-            print("    Start pattern is empty string, treating as None")
-            start_pattern = None
-        if end_pattern == "":
-            print("    End pattern is empty string, treating as None")
-            end_pattern = None
-        if skip_pattern == "":
-            print("    Skip pattern is empty string, treating as None")
-            skip_pattern = None
-
-        # Only proceed if at least one pattern is defined and not None
-        if not (start_pattern or end_pattern or skip_pattern):
-            print("    No valid regex patterns found, returning original DataFrame")
-            return df, {"status": "partial", "reason": "No valid regex patterns"}
-
-        print(f"    Applying regex patterns:")
-        if start_pattern:
-            print(f"    • Start pattern: '{start_pattern}'")
-        if end_pattern:
-            print(f"    • End pattern: '{end_pattern}'")
-        if skip_pattern:
-            print(f"    • Skip pattern: '{skip_pattern}'")
-        
-        # Sample the data to show what we're matching against
-        if not df.empty:
-            sample_rows = min(3, len(df))
-            print(f"    Sample data (first {sample_rows} rows):")
-            for i in range(sample_rows):
-                row_values = " ".join([str(val) for val in df.iloc[i].values])
-                print(f"      Row {i}: {row_values[:100]}...")
-
-        # Convert DataFrame to string for easier regex matching
-        try:
-            str_df = df.astype(str)
-            print("    Converted DataFrame to string for regex matching")
-        except Exception as e:
-            print(f"    ⚠️ Error converting DataFrame to string: {str(e)}")
-            return df, {"status": "partial", "reason": f"Error in conversion: {str(e)}"}
-
-        # Apply boundary detection if patterns are provided
-        if start_pattern or end_pattern:
-            start_idx = None
-            end_idx = None
-
-            # Find start index based on pattern - only if start_pattern is explicitly defined
-            if start_pattern:
-                try:
-                    print(f"    Searching for start pattern '{start_pattern}'...")
-                    for idx, row in str_df.iterrows():
-                        row_text = " ".join(row.values)
-                        if re.search(start_pattern, row_text, re.IGNORECASE):
-                            start_idx = idx
-                            print(f"    ✓ Found start pattern match at row {start_idx}")
-                            print(f"      Matched text: {row_text[:100]}...")
-                            break
-
-                    # If start pattern is specified but not found, return empty DataFrame
-                    if start_idx is None:
-                        print(f"    ⚠️ Start pattern '{start_pattern}' not found in any row")
-                        print(f"    Returning empty DataFrame as no start pattern match was found")
-                        return pd.DataFrame(), {"status": "failed", "reason": f"Start pattern '{start_pattern}' not found"}
-                except re.error as e:
-                    print(f"    ❌ Invalid start pattern '{start_pattern}': {str(e)}")
-                    # Skip this pattern but continue with the others
-                    start_pattern = None
-
-            # If start_pattern had an error or was None, start from the beginning
-            if start_pattern is None:
-                start_idx = 0
-                print(f"    No valid start pattern, starting from first row (index {start_idx})")
-
-            # Find end index based on pattern - only if end_pattern is explicitly defined
-            if end_pattern:
-                try:
-                    print(f"    Searching for end pattern '{end_pattern}' starting from row {start_idx}...")
-                    for idx, row in str_df.loc[start_idx:].iterrows():
-                        row_text = " ".join(row.values)
-                        if re.search(end_pattern, row_text, re.IGNORECASE):
-                            end_idx = idx
-                            print(f"    ✓ Found end pattern match at row {end_idx}")
-                            print(f"      Matched text: {row_text[:100]}...")
-                            break
-
-                    # If end pattern is specified but not found, use the last row
-                    if end_idx is None:
-                        end_idx = df.index[-1]
-                        print(f"    ⚠️ End pattern '{end_pattern}' not found, using last row at index {end_idx}")
-                except re.error as e:
-                    print(f"    ❌ Invalid end pattern '{end_pattern}': {str(e)}")
-                    # Skip this pattern but continue with the others
-                    end_pattern = None
-
-            # If end_pattern had an error or was None, use the last row
-            if end_pattern is None:
-                end_idx = df.index[-1]
-                print(f"    No valid end pattern, using last row (index {end_idx})")
-
-            try:
-                # Slice DataFrame to keep only rows between boundaries (inclusive)
-                before_slice = len(df)
-                df = df.loc[start_idx:end_idx]
-                after_slice = len(df)
-                rows_removed = before_slice - after_slice
-                
-                if rows_removed > 0:
-                    print(f"    ✓ Applied boundary slicing: removed {rows_removed} rows, kept {after_slice} rows")
-                else:
-                    print(f"    ℹ Boundary slicing had no effect: kept all {after_slice} rows")
-            except Exception as e:
-                print(f"    ❌ Error during boundary slicing: {str(e)}")
-                # If there's an error in slicing, return the original DataFrame
-                return df, {"status": "partial", "reason": f"Error in boundary slicing: {str(e)}"}
-
-        # Filter out rows matching skip pattern - only if skip_pattern is explicitly defined
-        if skip_pattern and not df.empty:
-            try:
-                print(f"    Applying skip pattern '{skip_pattern}'...")
-                before_count = len(df)
-                
-                # Create a string version of the current DataFrame
-                str_df = df.astype(str)
-                
-                # Apply the filter
-                df = df[~str_df.apply(lambda row: any(re.search(skip_pattern, str(val), re.IGNORECASE) for val in row), axis=1)]
-                
-                # Report results
-                after_count = len(df)
-                skipped_rows = before_count - after_count
-                
-                if skipped_rows > 0:
-                    print(f"    ✓ Skipped {skipped_rows} rows based on pattern")
-                    print(f"    Final DataFrame size: {after_count} rows")
-                else:
-                    print(f"    ℹ Skip pattern did not match any rows")
-                
-                # Check if we have any rows left
-                if df.empty:
-                    print(f"    ⚠️ All rows were filtered out by skip pattern!")
-                    return df, {"status": "failed", "reason": "All rows filtered out by skip pattern"}
-                    
-            except re.error as e:
-                print(f"    ❌ Invalid skip pattern '{skip_pattern}': {str(e)}")
-                # If there's an error with the skip pattern, continue with what we have
-                pass
-            except Exception as e:
-                print(f"    ❌ Error applying skip pattern: {str(e)}")
-                # Continue with what we have
-                pass
-        
-        # Check final state
-        final_status = "success"
-        reason = "Regex patterns applied successfully"
-        
-        # Empty result is a failure
-        if  df.empty:
-            final_status = "failed"
-            reason = "No data remained after applying patterns"
-        # If we have significantly fewer rows than we started with, consider it partial
-        elif len(df) < orig_row_count * 0.5 and orig_row_count > 10:
-            final_status = "partial"
-            reason = f"Only {len(df)} of {orig_row_count} rows remained after filtering"
-        # For very small datasets, just having data is good
-        elif len(df) < 5 and orig_row_count > 10:
-            final_status = "partial"
-            reason = f"Only {len(df)} rows extracted from {orig_row_count}"
-            
-        print(f"    ✓ Regex processing complete: {final_status} - {reason}")
-        print(f"    Final row count: {len(df)}")
-        
-        return df, {"status": final_status, "reason": reason}
 
     def stop_processing(self):
         """Stop the processing of files"""
@@ -2669,12 +2273,80 @@ class BulkProcessor(QWidget):
             combined_df = pd.concat(data_frames, ignore_index=True)
             self.validation_screen.set_data(combined_df)
             
-            # Load any saved rules
-            self.validation_screen.load_rules()
+            # Get selected template ID
+            template_id = self.get_selected_template_id()
+            
+            # Try to load validation rules from the template
+            template_rules = self.get_template_validation_rules(template_id)
+            
+            if template_rules:
+                # Set validation rules from template
+                self.validation_screen.validation_rules = template_rules
+                self.validation_screen.rules_list.setRowCount(0)  # Clear existing rules
+                
+                # Add rules to UI
+                for field, rules in template_rules.items():
+                    for rule in rules:
+                        row = self.validation_screen.rules_list.rowCount()
+                        self.validation_screen.rules_list.insertRow(row)
+                        self.validation_screen.rules_list.setItem(row, 0, QTableWidgetItem(field))
+                        self.validation_screen.rules_list.setItem(row, 1, QTableWidgetItem(rule["type"]))
+                        self.validation_screen.rules_list.setItem(row, 2, QTableWidgetItem(rule["params"]))
+                
+                QMessageBox.information(
+                    self,
+                    "Template Rules Loaded",
+                    f"Validation rules from the selected template have been loaded.\n\n"
+                    f"These rules will be applied to the extracted data.",
+                )
+            else:
+                # If no template rules, load rules from JSON file
+                self.validation_screen.load_rules()
             
             # Show validation screen
             self.validation_screen.show()
             self.hide()
+    
+    def get_template_validation_rules(self, template_id):
+        """Get validation rules from a template"""
+        if not template_id:
+            return None
+            
+        try:
+            # Connect to database
+            conn = sqlite3.connect("invoice_templates.db")
+            cursor = conn.cursor()
+            
+            # Check if validation_rules column exists
+            cursor.execute("PRAGMA table_info(templates)")
+            columns = cursor.fetchall()
+            column_names = [col[1] for col in columns]
+            
+            if "validation_rules" not in column_names:
+                print("Validation rules column does not exist in templates table")
+                conn.close()
+                return None
+            
+            # Get validation rules for the template
+            cursor.execute("SELECT validation_rules FROM templates WHERE id = ?", (template_id,))
+            result = cursor.fetchone()
+            
+            if not result or not result[0]:
+                print(f"No validation rules found for template ID {template_id}")
+                conn.close()
+                return None
+            
+            # Parse the validation rules
+            validation_rules = json.loads(result[0])
+            print(f"Loaded {len(validation_rules)} validation rules from template")
+            
+            conn.close()
+            return validation_rules
+        except Exception as e:
+            print(f"Error loading template validation rules: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return None
     
     def close_validation_screen(self):
         """Close the validation screen and return to bulk processor"""

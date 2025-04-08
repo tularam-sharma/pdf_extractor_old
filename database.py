@@ -132,7 +132,8 @@ class InvoiceDatabase:
                 page_count INTEGER DEFAULT 1,  -- Number of pages in the template
                 page_regions TEXT,  -- JSON string containing regions for each page
                 page_column_lines TEXT,  -- JSON string containing column lines for each page
-                page_configs TEXT  -- JSON string containing configs for each page
+                page_configs TEXT,  -- JSON string containing configs for each page
+                validation_rules TEXT  -- JSON string containing validation rules for fields
             )
         """)
         
@@ -178,9 +179,16 @@ class InvoiceDatabase:
             except sqlite3.Error as e:
                 print(f"Error adding page_configs column: {str(e)}")
         
+        if 'validation_rules' not in column_names:
+            print("Adding missing 'validation_rules' column to templates table")
+            try:
+                self.cursor.execute("ALTER TABLE templates ADD COLUMN validation_rules TEXT")
+            except sqlite3.Error as e:
+                print(f"Error adding validation_rules column: {str(e)}")
+        
         self.conn.commit()
     
-    def save_template(self, name, description, regions, column_lines, config, template_type="single", page_count=1, page_regions=None, page_column_lines=None, page_configs=None):
+    def save_template(self, name, description, regions, column_lines, config, template_type="single", page_count=1, page_regions=None, page_column_lines=None, page_configs=None, validation_rules=None):
         """Save a template to the database"""
         try:
             # Validate inputs
@@ -239,6 +247,9 @@ class InvoiceDatabase:
                 page_column_lines_json = json.dumps(page_column_lines) if page_column_lines else None
                 page_configs_json = json.dumps(page_configs) if page_configs else None
                 
+                # Convert validation_rules to JSON if provided
+                validation_rules_json = json.dumps(validation_rules) if validation_rules else None
+                
             except TypeError as json_error:
                 # Handle JSON serialization errors for specific types
                 error_msg = f"JSON serialization error: {str(json_error)}"
@@ -263,6 +274,7 @@ class InvoiceDatabase:
             has_page_regions = 'page_regions' in column_names
             has_page_column_lines = 'page_column_lines' in column_names
             has_page_configs = 'page_configs' in column_names
+            has_validation_rules = 'validation_rules' in column_names
             
             if existing_template:
                 print(f"  Updating existing template with ID: {existing_template[0]}")
@@ -273,14 +285,16 @@ class InvoiceDatabase:
                     "regions = ?",
                     "column_lines = ?",
                     "config = ?",
-                    "template_type = ?"
+                    "template_type = ?",
+                    "validation_rules = ?"
                 ]
                 update_values = [
                     description,
                     regions_json,
                     column_lines_json,
                     config_json,
-                    template_type
+                    template_type,
+                    validation_rules_json
                 ]
                 
                 if has_last_modified:
@@ -323,7 +337,8 @@ class InvoiceDatabase:
                     "column_lines",
                     "config",
                     "template_type",
-                    "creation_date"
+                    "creation_date",
+                    "validation_rules"
                 ]
                 insert_values = [
                     name,
@@ -332,7 +347,8 @@ class InvoiceDatabase:
                     column_lines_json,
                     config_json,
                     template_type,
-                    creation_date
+                    creation_date,
+                    validation_rules_json
                 ]
                 
                 if has_last_modified:
@@ -433,6 +449,9 @@ class InvoiceDatabase:
         if "page_configs" in column_names:
             select_columns.append("page_configs")
         
+        if "validation_rules" in column_names:
+            select_columns.append("validation_rules")
+        
         # Get template info including all available JSON data
         query = f"SELECT {', '.join(select_columns)} FROM templates WHERE id = ?"
         self.cursor.execute(query, (template_id,))
@@ -499,6 +518,17 @@ class InvoiceDatabase:
                 page_configs_json = template_row[column_index]
                 if page_configs_json:
                     template["page_configs"] = json.loads(page_configs_json)
+            
+            # Add validation_rules if column exists and data is present
+            if "validation_rules" in column_names:
+                column_index = select_columns.index("validation_rules")
+                validation_rules_json = template_row[column_index]
+                if validation_rules_json:
+                    template["validation_rules"] = json.loads(validation_rules_json)
+                else:
+                    template["validation_rules"] = []
+            else:
+                template["validation_rules"] = []
             
         except json.JSONDecodeError as e:
             print(f"Error parsing template JSON data: {str(e)}")

@@ -1,0 +1,1221 @@
+{
+  "service.pdf": {
+    "metadata": {
+      "filename": "service.pdf",
+      "page_count": 2,
+      "template_type": "multi",
+      "export_date": "2025-04-08T16:35:20.389201",
+      "template_name": "service-3 (Multi, 3 pages)"
+    },
+    "header": {
+      "table_0": {
+        "page_1": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49340(Cash)"
+          }
+        ]
+      },
+      "table_1": {
+        "page_1": [
+          {
+            "0": "Reg. No.",
+            "1": "HR26DL9450"
+          }
+        ]
+      },
+      "table_2": {
+        "page_1": [
+          {
+            "0": "GSTIN"
+          }
+        ]
+      },
+      "table_3": {
+        "page_2": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49340(Cash)"
+          }
+        ]
+      },
+      "table_4": {
+        "page_2": [
+          {
+            "0": "Reg. No.",
+            "1": "HR26DL9450"
+          }
+        ]
+      },
+      "table_5": {
+        "page_2": [
+          {
+            "0": "GSTIN"
+          }
+        ]
+      }
+    }
+  },
+  "service-2.pdf": {
+    "metadata": {
+      "filename": "service-2.pdf",
+      "page_count": 5,
+      "template_type": "multi",
+      "export_date": "2025-04-08T16:35:20.419169",
+      "template_name": "service-3 (Multi, 3 pages)"
+    },
+    "header": {
+      "table_0": {
+        "page_1": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXB24-11847(Cash)"
+          }
+        ]
+      },
+      "table_1": {
+        "page_1": [
+          {
+            "0": "Reg. No.",
+            "1": "HR26DM0072"
+          }
+        ]
+      },
+      "table_2": {
+        "page_1": [
+          {
+            "0": "GSTIN",
+            "1": "06AATHP9001K1ZQ"
+          }
+        ]
+      },
+      "table_3": {
+        "page_2": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXB24-11847(Cash)"
+          }
+        ]
+      },
+      "table_4": {
+        "page_2": [
+          {
+            "0": "Reg. No.",
+            "1": "HR26DM0072"
+          }
+        ]
+      },
+      "table_5": {
+        "page_2": [
+          {
+            "0": "GSTIN",
+            "1": "06AATHP9001K1ZQ"
+          }
+        ]
+      },
+      "table_6": {
+        "page_3": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXB24-11847(Cash)"
+          }
+        ]
+      },
+      "table_7": {
+        "page_3": [
+          {
+            "0": "Reg. No.",
+            "1": "HR26DM0072"
+          }
+        ]
+      },
+      "table_8": {
+        "page_3": [
+          {
+            "0": "GSTIN",
+            "1": "06AATHP9001K1ZQ"
+          }
+        ]
+      },
+      "table_9": {
+        "page_4": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXB24-11847(Cash)"
+          }
+        ]
+      },
+      "table_10": {
+        "page_4": [
+          {
+            "0": "Reg. No.",
+            "1": "HR26DM0072"
+          }
+        ]
+      },
+      "table_11": {
+        "page_4": [
+          {
+            "0": "GSTIN",
+            "1": "06AATHP9001K1ZQ"
+          }
+        ]
+      },
+      "table_12": {
+        "page_5": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXB24-11847(Cash)"
+          }
+        ]
+      },
+      "table_13": {
+        "page_5": [
+          {
+            "0": "Reg. No.",
+            "1": "HR26DM0072"
+          }
+        ]
+      },
+      "table_14": {
+        "page_5": [
+          {
+            "0": "GSTIN",
+            "1": "06AATHP9001K1ZQ"
+          }
+        ]
+      }
+    }
+  },
+  "TXA2449341-GU01A.pdf": {
+    "metadata": {
+      "filename": "TXA2449341-GU01A.pdf",
+      "page_count": 3,
+      "template_type": "multi",
+      "export_date": "2025-04-08T16:35:20.441567",
+      "template_name": "service-3 (Multi, 3 pages)"
+    },
+    "header": {
+      "table_0": {
+        "page_1": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49341(Cash)"
+          }
+        ]
+      },
+      "table_1": {
+        "page_1": [
+          {
+            "0": "Reg. No.",
+            "1": "DL7CW6200"
+          }
+        ]
+      },
+      "table_2": {
+        "page_1": [
+          {
+            "0": "GSTIN"
+          }
+        ]
+      },
+      "table_3": {
+        "page_2": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49341(Cash)"
+          }
+        ]
+      },
+      "table_4": {
+        "page_2": [
+          {
+            "0": "Reg. No.",
+            "1": "DL7CW6200"
+          }
+        ]
+      },
+      "table_5": {
+        "page_2": [
+          {
+            "0": "GSTIN"
+          }
+        ]
+      },
+      "table_6": {
+        "page_3": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49341(Cash)"
+          }
+        ]
+      },
+      "table_7": {
+        "page_3": [
+          {
+            "0": "Reg. No.",
+            "1": "DL7CW6200"
+          }
+        ]
+      },
+      "table_8": {
+        "page_3": [
+          {
+            "0": "GSTIN"
+          }
+        ]
+      }
+    }
+  },
+  "TXA2449342-GU01A.pdf": {
+    "metadata": {
+      "filename": "TXA2449342-GU01A.pdf",
+      "page_count": 2,
+      "template_type": "multi",
+      "export_date": "2025-04-08T16:35:20.474099",
+      "template_name": "service-3 (Multi, 3 pages)"
+    },
+    "header": {
+      "table_0": {
+        "page_1": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49342(Cash)"
+          }
+        ]
+      },
+      "table_1": {
+        "page_1": [
+          {
+            "0": "Reg. No.",
+            "1": "HR55AR6587"
+          }
+        ]
+      },
+      "table_2": {
+        "page_1": [
+          {
+            "0": "GSTIN",
+            "1": "06AAUPK9184B1ZC"
+          }
+        ]
+      },
+      "table_3": {
+        "page_2": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49342(Cash)"
+          }
+        ]
+      },
+      "table_4": {
+        "page_2": [
+          {
+            "0": "Reg. No.",
+            "1": "HR55AR6587"
+          }
+        ]
+      },
+      "table_5": {
+        "page_2": [
+          {
+            "0": "GSTIN",
+            "1": "06AAUPK9184B1ZC"
+          }
+        ]
+      }
+    }
+  },
+  "TXA2449343-GU01A.pdf": {
+    "metadata": {
+      "filename": "TXA2449343-GU01A.pdf",
+      "page_count": 1,
+      "template_type": "multi",
+      "export_date": "2025-04-08T16:35:20.475014",
+      "template_name": "service-3 (Multi, 3 pages)"
+    },
+    "header": {
+      "table_0": {
+        "page_1": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "2": "TXA24-49343(Cash)"
+          }
+        ]
+      },
+      "table_1": {
+        "page_1": [
+          {
+            "0": "GSTIN"
+          }
+        ]
+      },
+      "table_2": {
+        "page_1": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49343(Cash)"
+          }
+        ]
+      },
+      "table_3": {
+        "page_1": [
+          {
+            "0": "Reg. No.  HR26FS5492"
+          }
+        ]
+      },
+      "table_4": {
+        "page_1": [
+          {
+            "0": "GSTIN"
+          }
+        ]
+      }
+    }
+  },
+  "TXA2449344-GU01A.pdf": {
+    "metadata": {
+      "filename": "TXA2449344-GU01A.pdf",
+      "page_count": 1,
+      "template_type": "multi",
+      "export_date": "2025-04-08T16:35:20.491460",
+      "template_name": "service-3 (Multi, 3 pages)"
+    },
+    "header": {
+      "table_0": {
+        "page_1": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "2": "TXA24-49344(Cash)"
+          }
+        ]
+      },
+      "table_1": {
+        "page_1": [
+          {
+            "0": "GSTIN"
+          }
+        ]
+      },
+      "table_2": {
+        "page_1": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49344(Cash)"
+          }
+        ]
+      },
+      "table_3": {
+        "page_1": [
+          {
+            "0": "Reg. No.  DL10CZ1078"
+          }
+        ]
+      },
+      "table_4": {
+        "page_1": [
+          {
+            "0": "GSTIN"
+          }
+        ]
+      }
+    }
+  },
+  "TXA2449345-GU01A.pdf": {
+    "metadata": {
+      "filename": "TXA2449345-GU01A.pdf",
+      "page_count": 2,
+      "template_type": "multi",
+      "export_date": "2025-04-08T16:35:20.508618",
+      "template_name": "service-3 (Multi, 3 pages)"
+    },
+    "header": {
+      "table_0": {
+        "page_1": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49345(Cash)"
+          }
+        ]
+      },
+      "table_1": {
+        "page_1": [
+          {
+            "0": "Reg. No.",
+            "1": "HR51CN9092"
+          }
+        ]
+      },
+      "table_2": {
+        "page_1": [
+          {
+            "0": "GSTIN"
+          }
+        ]
+      },
+      "table_3": {
+        "page_2": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49345(Cash)"
+          }
+        ]
+      },
+      "table_4": {
+        "page_2": [
+          {
+            "0": "Reg. No.",
+            "1": "HR51CN9092"
+          }
+        ]
+      },
+      "table_5": {
+        "page_2": [
+          {
+            "0": "GSTIN"
+          }
+        ]
+      }
+    }
+  },
+  "TXA2449346-GU01A.pdf": {
+    "metadata": {
+      "filename": "TXA2449346-GU01A.pdf",
+      "page_count": 2,
+      "template_type": "multi",
+      "export_date": "2025-04-08T16:35:20.508618",
+      "template_name": "service-3 (Multi, 3 pages)"
+    },
+    "header": {
+      "table_0": {
+        "page_1": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49346(Cash)"
+          }
+        ]
+      },
+      "table_1": {
+        "page_1": [
+          {
+            "0": "Reg. No.",
+            "1": "T0125HR7029J"
+          }
+        ]
+      },
+      "table_2": {
+        "page_1": [
+          {
+            "0": "GSTIN"
+          }
+        ]
+      },
+      "table_3": {
+        "page_2": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49346(Cash)"
+          }
+        ]
+      },
+      "table_4": {
+        "page_2": [
+          {
+            "0": "Reg. No.",
+            "1": "T0125HR7029J"
+          }
+        ]
+      },
+      "table_5": {
+        "page_2": [
+          {
+            "0": "GSTIN"
+          }
+        ]
+      }
+    }
+  },
+  "TXA2449347-GU01A.pdf": {
+    "metadata": {
+      "filename": "TXA2449347-GU01A.pdf",
+      "page_count": 2,
+      "template_type": "multi",
+      "export_date": "2025-04-08T16:35:20.525220",
+      "template_name": "service-3 (Multi, 3 pages)"
+    },
+    "header": {
+      "table_0": {
+        "page_1": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49347(Cash)"
+          }
+        ]
+      },
+      "table_1": {
+        "page_1": [
+          {
+            "0": "Reg. No.",
+            "1": "CH01CL1201"
+          }
+        ]
+      },
+      "table_2": {
+        "page_1": [
+          {
+            "0": "GSTIN"
+          }
+        ]
+      },
+      "table_3": {
+        "page_2": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49347(Cash)"
+          }
+        ]
+      },
+      "table_4": {
+        "page_2": [
+          {
+            "0": "Reg. No.",
+            "1": "CH01CL1201"
+          }
+        ]
+      },
+      "table_5": {
+        "page_2": [
+          {
+            "0": "GSTIN"
+          }
+        ]
+      }
+    }
+  },
+  "TXA2449348-GU01A.pdf": {
+    "metadata": {
+      "filename": "TXA2449348-GU01A.pdf",
+      "page_count": 2,
+      "template_type": "multi",
+      "export_date": "2025-04-08T16:35:20.542040",
+      "template_name": "service-3 (Multi, 3 pages)"
+    },
+    "header": {
+      "table_0": {
+        "page_1": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49348(Cash)"
+          }
+        ]
+      },
+      "table_1": {
+        "page_1": [
+          {
+            "0": "Reg. No.",
+            "1": "REGNO"
+          }
+        ]
+      },
+      "table_2": {
+        "page_1": [
+          {
+            "0": "GSTIN"
+          }
+        ]
+      },
+      "table_3": {
+        "page_2": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49348(Cash)"
+          }
+        ]
+      },
+      "table_4": {
+        "page_2": [
+          {
+            "0": "Reg. No.",
+            "1": "REGNO"
+          }
+        ]
+      },
+      "table_5": {
+        "page_2": [
+          {
+            "0": "GSTIN"
+          }
+        ]
+      }
+    }
+  },
+  "TXA2449349-GU01A.pdf": {
+    "metadata": {
+      "filename": "TXA2449349-GU01A.pdf",
+      "page_count": 2,
+      "template_type": "multi",
+      "export_date": "2025-04-08T16:35:20.558285",
+      "template_name": "service-3 (Multi, 3 pages)"
+    },
+    "header": {
+      "table_0": {
+        "page_1": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49349(Cash)"
+          }
+        ]
+      },
+      "table_1": {
+        "page_1": [
+          {
+            "0": "Reg. No.",
+            "1": "HR98P3479"
+          }
+        ]
+      },
+      "table_2": {
+        "page_1": [
+          {
+            "0": "GSTIN"
+          }
+        ]
+      },
+      "table_3": {
+        "page_2": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49349(Cash)"
+          }
+        ]
+      },
+      "table_4": {
+        "page_2": [
+          {
+            "0": "Reg. No.",
+            "1": "HR98P3479"
+          }
+        ]
+      },
+      "table_5": {
+        "page_2": [
+          {
+            "0": "GSTIN"
+          }
+        ]
+      }
+    }
+  },
+  "TXA2449350-GU01A.pdf": {
+    "metadata": {
+      "filename": "TXA2449350-GU01A.pdf",
+      "page_count": 1,
+      "template_type": "multi",
+      "export_date": "2025-04-08T16:35:20.574888",
+      "template_name": "service-3 (Multi, 3 pages)"
+    },
+    "header": {
+      "table_0": {
+        "page_1": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "2": "TXA24-49350(Cash)"
+          }
+        ]
+      },
+      "table_1": {
+        "page_1": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49350(Cash)"
+          }
+        ]
+      },
+      "table_2": {
+        "page_1": [
+          {
+            "0": "Reg. No.  HR26FS2394"
+          }
+        ]
+      },
+      "table_3": {
+        "page_1": [
+          {
+            "0": "GSTIN 06AAACO0054F1Z0"
+          }
+        ]
+      }
+    }
+  },
+  "TXA2449351-GU01A.pdf": {
+    "metadata": {
+      "filename": "TXA2449351-GU01A.pdf",
+      "page_count": 2,
+      "template_type": "multi",
+      "export_date": "2025-04-08T16:35:20.574888",
+      "template_name": "service-3 (Multi, 3 pages)"
+    },
+    "header": {
+      "table_0": {
+        "page_1": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49351(Cash)"
+          }
+        ]
+      },
+      "table_1": {
+        "page_1": [
+          {
+            "0": "Reg. No.",
+            "1": "HR02AY0005"
+          }
+        ]
+      },
+      "table_2": {
+        "page_1": [
+          {
+            "0": "GSTIN",
+            "1": "06AAFCF5585R1ZT"
+          }
+        ]
+      },
+      "table_3": {
+        "page_2": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49351(Cash)"
+          }
+        ]
+      },
+      "table_4": {
+        "page_2": [
+          {
+            "0": "Reg. No.",
+            "1": "HR02AY0005"
+          }
+        ]
+      },
+      "table_5": {
+        "page_2": [
+          {
+            "0": "GSTIN",
+            "1": "06AAFCF5585R1ZT"
+          }
+        ]
+      }
+    }
+  },
+  "TXA2449352-GU01A.pdf": {
+    "metadata": {
+      "filename": "TXA2449352-GU01A.pdf",
+      "page_count": 2,
+      "template_type": "multi",
+      "export_date": "2025-04-08T16:35:20.591439",
+      "template_name": "service-3 (Multi, 3 pages)"
+    },
+    "header": {
+      "table_0": {
+        "page_1": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49352(Credit)"
+          }
+        ]
+      },
+      "table_1": {
+        "page_1": [
+          {
+            "0": "Reg. No.",
+            "1": "HR98J3401"
+          }
+        ]
+      },
+      "table_2": {
+        "page_1": [
+          {
+            "0": "GSTIN",
+            "1": "06AATCS9490A1ZX"
+          }
+        ]
+      },
+      "table_3": {
+        "page_2": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49352(Credit)"
+          }
+        ]
+      },
+      "table_4": {
+        "page_2": [
+          {
+            "0": "Reg. No.",
+            "1": "HR98J3401"
+          }
+        ]
+      },
+      "table_5": {
+        "page_2": [
+          {
+            "0": "GSTIN",
+            "1": "06AATCS9490A1ZX"
+          }
+        ]
+      }
+    }
+  },
+  "TXA2449353-GU01A.pdf": {
+    "metadata": {
+      "filename": "TXA2449353-GU01A.pdf",
+      "page_count": 3,
+      "template_type": "multi",
+      "export_date": "2025-04-08T16:35:20.608403",
+      "template_name": "service-3 (Multi, 3 pages)"
+    },
+    "header": {
+      "table_0": {
+        "page_1": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49353(Cash)"
+          }
+        ]
+      },
+      "table_1": {
+        "page_1": [
+          {
+            "0": "Reg. No.",
+            "1": "HR98S8302"
+          }
+        ]
+      },
+      "table_2": {
+        "page_1": [
+          {
+            "0": "GSTIN",
+            "1": "07AAICM7825J1Z2"
+          }
+        ]
+      },
+      "table_3": {
+        "page_2": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49353(Cash)"
+          }
+        ]
+      },
+      "table_4": {
+        "page_2": [
+          {
+            "0": "Reg. No.",
+            "1": "HR98S8302"
+          }
+        ]
+      },
+      "table_5": {
+        "page_2": [
+          {
+            "0": "GSTIN",
+            "1": "07AAICM7825J1Z2"
+          }
+        ]
+      },
+      "table_6": {
+        "page_3": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49353(Cash)"
+          }
+        ]
+      },
+      "table_7": {
+        "page_3": [
+          {
+            "0": "Reg. No.",
+            "1": "HR98S8302"
+          }
+        ]
+      },
+      "table_8": {
+        "page_3": [
+          {
+            "0": "GSTIN",
+            "1": "07AAICM7825J1Z2"
+          }
+        ]
+      }
+    }
+  },
+  "TXA2449354-GU01A.pdf": {
+    "metadata": {
+      "filename": "TXA2449354-GU01A.pdf",
+      "page_count": 2,
+      "template_type": "multi",
+      "export_date": "2025-04-08T16:35:20.625244",
+      "template_name": "service-3 (Multi, 3 pages)"
+    },
+    "header": {
+      "table_0": {
+        "page_1": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49354(Cash)"
+          }
+        ]
+      },
+      "table_1": {
+        "page_1": [
+          {
+            "0": "Reg. No.",
+            "1": "HR55AV4637"
+          }
+        ]
+      },
+      "table_2": {
+        "page_1": [
+          {
+            "0": "GSTIN"
+          }
+        ]
+      },
+      "table_3": {
+        "page_2": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49354(Cash)"
+          }
+        ]
+      },
+      "table_4": {
+        "page_2": [
+          {
+            "0": "Reg. No.",
+            "1": "HR55AV4637"
+          }
+        ]
+      },
+      "table_5": {
+        "page_2": [
+          {
+            "0": "GSTIN"
+          }
+        ]
+      }
+    }
+  },
+  "TXA2449355-GU01A.pdf": {
+    "metadata": {
+      "filename": "TXA2449355-GU01A.pdf",
+      "page_count": 1,
+      "template_type": "multi",
+      "export_date": "2025-04-08T16:35:20.640989",
+      "template_name": "service-3 (Multi, 3 pages)"
+    },
+    "header": {
+      "table_0": {
+        "page_1": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "2": "TXA24-49355(Cash)"
+          }
+        ]
+      },
+      "table_1": {
+        "page_1": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49355(Cash)"
+          }
+        ]
+      },
+      "table_2": {
+        "page_1": [
+          {
+            "0": "Reg. No.  T0125HR3388F"
+          }
+        ]
+      },
+      "table_3": {
+        "page_1": [
+          {
+            "0": "GSTIN 07DZIPS5924M1ZL"
+          }
+        ]
+      }
+    }
+  },
+  "TXA2449356-GU01A.pdf": {
+    "metadata": {
+      "filename": "TXA2449356-GU01A.pdf",
+      "page_count": 2,
+      "template_type": "multi",
+      "export_date": "2025-04-08T16:35:20.641997",
+      "template_name": "service-3 (Multi, 3 pages)"
+    },
+    "header": {
+      "table_0": {
+        "page_1": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49356(Cash)"
+          }
+        ]
+      },
+      "table_1": {
+        "page_1": [
+          {
+            "0": "Reg. No.",
+            "1": "HR36AT4867"
+          }
+        ]
+      },
+      "table_2": {
+        "page_1": [
+          {
+            "0": "GSTIN"
+          }
+        ]
+      },
+      "table_3": {
+        "page_2": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49356(Cash)"
+          }
+        ]
+      },
+      "table_4": {
+        "page_2": [
+          {
+            "0": "Reg. No.",
+            "1": "HR36AT4867"
+          }
+        ]
+      },
+      "table_5": {
+        "page_2": [
+          {
+            "0": "GSTIN"
+          }
+        ]
+      }
+    }
+  },
+  "TXA2449357-GU01A.pdf": {
+    "metadata": {
+      "filename": "TXA2449357-GU01A.pdf",
+      "page_count": 2,
+      "template_type": "multi",
+      "export_date": "2025-04-08T16:35:20.658798",
+      "template_name": "service-3 (Multi, 3 pages)"
+    },
+    "header": {
+      "table_0": {
+        "page_1": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49357(Cash)"
+          }
+        ]
+      },
+      "table_1": {
+        "page_1": [
+          {
+            "0": "Reg. No.",
+            "1": "UP17Z7669"
+          }
+        ]
+      },
+      "table_2": {
+        "page_1": [
+          {
+            "0": "GSTIN"
+          }
+        ]
+      },
+      "table_3": {
+        "page_2": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49357(Cash)"
+          }
+        ]
+      },
+      "table_4": {
+        "page_2": [
+          {
+            "0": "Reg. No.",
+            "1": "UP17Z7669"
+          }
+        ]
+      },
+      "table_5": {
+        "page_2": [
+          {
+            "0": "GSTIN"
+          }
+        ]
+      }
+    }
+  },
+  "TXA2449358-GU01A.pdf": {
+    "metadata": {
+      "filename": "TXA2449358-GU01A.pdf",
+      "page_count": 2,
+      "template_type": "multi",
+      "export_date": "2025-04-08T16:35:20.674996",
+      "template_name": "service-3 (Multi, 3 pages)"
+    },
+    "header": {
+      "table_0": {
+        "page_1": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49358(Cash)"
+          }
+        ]
+      },
+      "table_1": {
+        "page_1": [
+          {
+            "0": "Reg. No.",
+            "1": "T0125HR1446K"
+          }
+        ]
+      },
+      "table_2": {
+        "page_1": [
+          {
+            "0": "GSTIN"
+          }
+        ]
+      },
+      "table_3": {
+        "page_2": [
+          {
+            "0": "Tax Invoice No./Sales Invoice",
+            "1": "TXA24-49358(Cash)"
+          }
+        ]
+      },
+      "table_4": {
+        "page_2": [
+          {
+            "0": "Reg. No.",
+            "1": "T0125HR1446K"
+          }
+        ]
+      },
+      "table_5": {
+        "page_2": [
+          {
+            "0": "GSTIN"
+          }
+        ]
+      }
+    }
+  }
+}
