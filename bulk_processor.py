@@ -6,6 +6,7 @@ import sqlite3
 from datetime import datetime
 import fitz  # PyMuPDF
 import pypdf_table_extraction
+from license_manager import get_license_manager
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -44,23 +45,23 @@ class NoFrameStyle(QProxyStyle):
         if hint == QStyle.SH_ComboBox_Popup:
             return 0
         return super().styleHint(hint, option, widget, returnData)
-        
+
 
 class BulkProcessor(QWidget):
     # Define signals
     back_requested = Signal()  # Signal for navigating back to main dashboard
     go_back = Signal()  # Signal for navigating back to main dashboard
-    
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent = parent
         self.pdf_files = []
         self.processed_data = {}
-        
+
         # Initialize stop flag for processing
         self.should_stop = False
         self.start_time = None
-        
+
         # Define AI theme colors
         self.theme = {
             "primary": "#6366F1",       # Indigo
@@ -75,7 +76,7 @@ class BulkProcessor(QWidget):
             "text": "#1F2937",          # Text dark
             "border": "#E5E7EB",        # Border light gray
         }
-        
+
         # Set widget background
         self.setStyleSheet(f"""
             QWidget {{
@@ -83,11 +84,11 @@ class BulkProcessor(QWidget):
                 color: {self.theme['text']};
                 font-family: 'Segoe UI', Arial, sans-serif;
             }}
-            
+
             QLabel {{
                 font-size: 14px;
             }}
-            
+
             QComboBox {{
                 border: 1px solid {self.theme['border']};
                 border-radius: 6px;
@@ -96,7 +97,7 @@ class BulkProcessor(QWidget):
                 min-height: 22px;
                 selection-background-color: {self.theme['primary']};
             }}
-            
+
             QComboBox::drop-down {{
                 subcontrol-origin: padding;
                 subcontrol-position: top right;
@@ -105,7 +106,7 @@ class BulkProcessor(QWidget):
                 border-top-right-radius: 6px;
                 border-bottom-right-radius: 6px;
             }}
-            
+
             QListWidget {{
                 border: 1px solid {self.theme['border']};
                 border-radius: 6px;
@@ -114,7 +115,7 @@ class BulkProcessor(QWidget):
                 selection-background-color: {self.theme['primary']};
                 selection-color: white;
             }}
-            
+
             QTableWidget {{
                 border: 1px solid {self.theme['border']};
                 border-radius: 6px;
@@ -123,11 +124,11 @@ class BulkProcessor(QWidget):
                 selection-background-color: {self.theme['primary']};
                 selection-color: white;
             }}
-            
+
             QTableWidget::item {{
                 padding: 6px;
             }}
-            
+
             QHeaderView::section {{
                 background-color: {self.theme['light']};
                 border: none;
@@ -137,7 +138,7 @@ class BulkProcessor(QWidget):
                 border-right: 1px solid {self.theme['border']};
                 border-bottom: 1px solid {self.theme['border']};
             }}
-            
+
             QProgressBar {{
                 border: none;
                 border-radius: 4px;
@@ -145,21 +146,33 @@ class BulkProcessor(QWidget):
                 height: 12px;
                 text-align: center;
             }}
-            
+
             QProgressBar::chunk {{
                 background-color: {self.theme['primary']};
                 border-radius: 4px;
             }}
         """)
-        
+
         self.init_ui()
         self.load_templates()  # Load templates when initializing
-    
+
     def init_ui(self):
         layout = QVBoxLayout(self)
         layout.setSpacing(16)
         layout.setContentsMargins(24, 24, 24, 24)
-        
+
+        # License info section
+        self.license_info_label = QLabel("")
+        self.license_info_label.setStyleSheet(f"""
+            background-color: {self.theme['primary'] + '10'};
+            border: 1px solid {self.theme['primary'] + '30'};
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: {self.theme['primary']};
+            font-size: 13px;
+        """)
+        self.license_info_label.setVisible(False)  # Hide initially, will show based on license
+
         # # Header section - Title and info
         # header_layout = QHBoxLayout()
         # title_label = QLabel("PDF Table Extractor", self)
@@ -171,7 +184,7 @@ class BulkProcessor(QWidget):
         # header_layout.addWidget(title_label)
         # header_layout.addStretch()
         # layout.addLayout(header_layout)
-        
+
         # Create a horizontal splitter to divide the screen left/right
         main_splitter = QSplitter(Qt.Horizontal)
         main_splitter.setHandleWidth(1)
@@ -180,13 +193,13 @@ class BulkProcessor(QWidget):
                 background-color: {self.theme['border']};
             }}
         """)
-        
+
         # LEFT SECTION - Extraction controls
         left_widget = QWidget()
         left_layout = QVBoxLayout(left_widget)
         left_layout.setSpacing(16)
         left_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         # Template selection with card style
         template_card = QFrame(self)
         template_card.setStyleSheet(f"""
@@ -201,19 +214,19 @@ class BulkProcessor(QWidget):
         template_label = QLabel("Select Template", self)
         template_label.setStyleSheet("font-weight: bold; font-size: 16px;")
         template_layout.addWidget(template_label)
-        
+
         template_input_layout = QHBoxLayout()
         self.template_combo = QComboBox(self)
         self.template_combo.setMinimumHeight(36)
-        
+
         # Apply custom style to remove frame
         self.template_combo.setStyle(NoFrameStyle())
-        
+
         # Create and set a custom list view for the combo box
         list_view = QListView()
         list_view.setFrameShape(QListView.NoFrame)
         self.template_combo.setView(list_view)
-        
+
         # Styled dropdown with proper border
         self.template_combo.setStyleSheet("""
             QComboBox {
@@ -225,20 +238,20 @@ class BulkProcessor(QWidget):
                 color: #1F2937;
                 font-size: 14px;
             }
-            
+
             QComboBox:hover, QComboBox:focus {
                 border: 1px solid #6366F1;
             }
-            
+
             QComboBox::drop-down {
                 border: none;
                 width: 20px;
             }
-            
+
             QComboBox::down-arrow {
                 image: none;
             }
-            
+
             QComboBox QAbstractItemView {
                 border: 1px solid #E5E7EB;
                 border-radius: 4px;
@@ -246,28 +259,28 @@ class BulkProcessor(QWidget):
                 background-color: white;
                 outline: none;
             }
-            
+
             QComboBox QAbstractItemView::item {
                 border-bottom: 1px solid #F3F4F6;
                 padding: 8px 12px;
                 min-height: 30px;
                 color: #1F2937;
             }
-            
+
             QComboBox QAbstractItemView::item:last-child {
                 border-bottom: none;
             }
-            
+
             QComboBox QAbstractItemView::item:hover {
                 background-color: #F3F4F6;
             }
-            
+
             QComboBox QAbstractItemView::item:selected {
                 background-color: #EEF2FF;
                 color: #4F46E5;
             }
         """)
-        
+
         # Add refresh button
         refresh_btn = QPushButton("Refresh", self)
         refresh_btn.clicked.connect(self.load_templates)
@@ -290,11 +303,11 @@ class BulkProcessor(QWidget):
                 padding-left: 17px;
             }}
         """)
-        
+
         template_input_layout.addWidget(self.template_combo, 1)
         template_input_layout.addWidget(refresh_btn, 0)
         template_layout.addLayout(template_input_layout)
-        
+
         # Multi-page info label with modern style
         self.multi_page_label = QLabel("Multi-page support: Enabled ✓", self)
         self.multi_page_label.setStyleSheet(f"""
@@ -305,26 +318,26 @@ class BulkProcessor(QWidget):
                 border-radius: 4px;
         """)
         template_layout.addWidget(self.multi_page_label)
-        
+
         # Status and Progress
         status_layout = QHBoxLayout()
         # Status indicator without any background or border
         self.status_label = QLabel("Ready", self)
         self.status_label.setStyleSheet("color: #00B8A9;")
         status_layout.addWidget(self.status_label)
-        
+
         # Processing time label - simple text only
         self.processing_time_label = QLabel("", self)
         self.processing_time_label.setStyleSheet("color: #1F2937;")
         status_layout.addWidget(self.processing_time_label)
-        
+
         # Add stretch to push labels to the left
         status_layout.addStretch()
         template_layout.addLayout(status_layout)
-        
+
         # Progress bar and stop button in a layout
         progress_layout = QHBoxLayout()
-        
+
         # Progress bar with modern style
         self.progress_bar = QProgressBar(self)
         self.progress_bar.setTextVisible(False)
@@ -342,7 +355,7 @@ class BulkProcessor(QWidget):
             }}
         """)
         progress_layout.addWidget(self.progress_bar, 1)
-        
+
         # Stop button
         self.stop_button = QPushButton("Stop", self)
         self.stop_button.clicked.connect(self.stop_processing)
@@ -364,11 +377,11 @@ class BulkProcessor(QWidget):
         """)
         self.stop_button.setVisible(False)
         progress_layout.addWidget(self.stop_button)
-        
+
         template_layout.addLayout(progress_layout)
-        
+
         left_layout.addWidget(template_card)
-        
+
         # File Operations section
         file_card = QFrame(self)
         file_card.setStyleSheet(f"""
@@ -380,11 +393,11 @@ class BulkProcessor(QWidget):
             }}
         """)
         file_layout = QVBoxLayout(file_card)
-        
+
         file_title = QLabel("PDF Files", self)
         file_title.setStyleSheet("font-weight: bold; font-size: 16px;")
         file_layout.addWidget(file_title)
-        
+
         # File list with better spacing
         self.file_list = QListWidget(self)
         self.file_list.setMinimumHeight(200)
@@ -406,11 +419,11 @@ class BulkProcessor(QWidget):
             }}
         """)
         file_layout.addWidget(self.file_list)
-        
+
         # Buttons for file operations
         button_layout = QHBoxLayout()
         button_layout.setSpacing(12)
-        
+
         add_files_btn = QPushButton("Add Files", self)
         add_files_btn.clicked.connect(self.add_files)
         add_files_btn.setStyleSheet(f"""
@@ -431,7 +444,7 @@ class BulkProcessor(QWidget):
                 padding-left: 17px;
             }}
         """)
-        
+
         clear_files_btn = QPushButton("Clear Files", self)
         clear_files_btn.clicked.connect(self.clear_files)
         clear_files_btn.setStyleSheet(f"""
@@ -453,7 +466,7 @@ class BulkProcessor(QWidget):
                 padding-left: 17px;
             }}
         """)
-        
+
         process_btn = QPushButton("Process Files", self)
         process_btn.clicked.connect(self.process_files)
         process_btn.setStyleSheet(f"""
@@ -474,16 +487,16 @@ class BulkProcessor(QWidget):
                 padding-left: 17px;
             }}
         """)
-        
+
         button_layout.addWidget(add_files_btn)
         button_layout.addWidget(clear_files_btn)
         button_layout.addWidget(process_btn)
         file_layout.addLayout(button_layout)
         left_layout.addWidget(file_card)
-        
+
         # Navigation section at bottom of left panel
         nav_layout = QHBoxLayout()
-        
+
         # Back button on the left
         back_btn = QPushButton("← Back", self)
         back_btn.clicked.connect(self.navigate_back)
@@ -502,7 +515,7 @@ class BulkProcessor(QWidget):
                 padding-left: 17px;
             }}
         """)
-        
+
         # Reset screen button on the right
         reset_btn = QPushButton("Reset Screen", self)
         reset_btn.clicked.connect(self.reset_screen)
@@ -524,22 +537,22 @@ class BulkProcessor(QWidget):
                 padding-left: 17px;
             }}
         """)
-        
+
         nav_layout.addWidget(back_btn)
         nav_layout.addStretch()
         nav_layout.addWidget(reset_btn)
-        
+
         left_layout.addLayout(nav_layout)
-        
+
         # Add left widget to splitter
         main_splitter.addWidget(left_widget)
-        
+
         # RIGHT SECTION - Extraction results
         right_widget = QWidget()
         right_layout = QVBoxLayout(right_widget)
         right_layout.setSpacing(16)
         right_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         # Results section
         results_card = QFrame(self)
         results_card.setStyleSheet(f"""
@@ -551,11 +564,11 @@ class BulkProcessor(QWidget):
             }}
         """)
         results_layout = QVBoxLayout(results_card)
-        
+
         results_title = QLabel("Extraction Results", self)
         results_title.setStyleSheet("font-weight: bold; font-size: 16px;")
         results_layout.addWidget(results_title)
-        
+
         # Summary statistics panel
         summary_frame = QFrame()
         summary_frame.setStyleSheet(f"""
@@ -571,28 +584,28 @@ class BulkProcessor(QWidget):
         """)
         summary_layout = QGridLayout(summary_frame)
         summary_layout.setSpacing(12)
-        
+
         # Add summary statistics labels
         processed_label = QLabel("Processed Files:", self)
         processed_label.setStyleSheet("font-weight: bold;")
         self.processed_count = QLabel("0", self)
         self.processed_count.setStyleSheet(f"color: {self.theme['primary']}; font-weight: bold;")
-        
+
         success_label = QLabel("Successful:", self)
         success_label.setStyleSheet("font-weight: bold;")
         self.success_count = QLabel("0", self)
         self.success_count.setStyleSheet(f"color: {self.theme['secondary']}; font-weight: bold;")
-        
+
         failed_label = QLabel("Failed:", self)
         failed_label.setStyleSheet("font-weight: bold;")
         self.failed_count = QLabel("0", self)
         self.failed_count.setStyleSheet(f"color: {self.theme['danger']}; font-weight: bold;")
-        
+
         total_rows_label = QLabel("Total Rows Extracted:", self)
         total_rows_label.setStyleSheet("font-weight: bold;")
         self.total_rows_count = QLabel("0", self)
         self.total_rows_count.setStyleSheet("font-weight: bold;")
-        
+
         # Add labels to grid layout
         summary_layout.addWidget(processed_label, 0, 0)
         summary_layout.addWidget(self.processed_count, 0, 1)
@@ -602,9 +615,9 @@ class BulkProcessor(QWidget):
         summary_layout.addWidget(self.failed_count, 0, 5)
         summary_layout.addWidget(total_rows_label, 1, 0, 1, 2)
         summary_layout.addWidget(self.total_rows_count, 1, 2, 1, 1)
-        
+
         results_layout.addWidget(summary_frame)
-        
+
         # Results table with modern style
         self.results_table = QTableWidget(self)
         self.results_table.setColumnCount(6)
@@ -621,19 +634,19 @@ class BulkProcessor(QWidget):
 
         # Set up horizontal header with better styling
         header = self.results_table.horizontalHeader()
-        
+
         # Configure header behavior
         header.setVisible(True)
         header.setHighlightSections(False)
         header.setStretchLastSection(False)
         header.setSectionsMovable(False)
-        
+
         # Set column widths and resize modes
         column_widths = [150, 150, 100, 150, 150, 150]
         for i, width in enumerate(column_widths):
             self.results_table.setColumnWidth(i, width)
             header.setSectionResizeMode(i, QHeaderView.Fixed)  # Fixed width to prevent disappearing
-        
+
         # Update table stylesheet with more prominent header styling and proper alignment
         self.results_table.setStyleSheet(f"""
             QTableWidget {{
@@ -642,7 +655,7 @@ class BulkProcessor(QWidget):
                 background-color: white;
                 gridline-color: {self.theme['border']};
             }}
-            
+
             QHeaderView::section {{
                 background-color: white;
                 color: {self.theme['text']};
@@ -653,30 +666,30 @@ class BulkProcessor(QWidget):
                 min-height: 30px;
                 max-height: 30px;
             }}
-            
+
             QHeaderView::section:horizontal {{
                 border-top: 1px solid {self.theme['border']};
                 text-align: left;
                 padding-left: 12px;
             }}
-            
+
             QTableWidget::item {{
                 padding: 8px;
                 border-bottom: 1px solid {self.theme['border']};
                 text-align: left;
                 padding-left: 12px;
             }}
-            
+
             QTableWidget::item:selected {{
                 background-color: {self.theme['primary'] + '15'};
                 color: {self.theme['text']};
             }}
         """)
-        
+
         # Additional header settings
         header.setMinimumHeight(40)
         header.setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        
+
         # Enable features for better usability
         self.results_table.setAlternatingRowColors(False)  # Disable alternating row colors
         self.results_table.setShowGrid(True)
@@ -685,10 +698,10 @@ class BulkProcessor(QWidget):
         self.results_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.results_table.setSelectionMode(QTableWidget.SingleSelection)
         self.results_table.setMinimumHeight(300)
-        
+
         # Set table size policy to expand properly
         self.results_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        
+
         # Ensure the table is properly contained in a frame
         table_frame = QFrame()
         table_frame.setStyleSheet(f"""
@@ -702,24 +715,23 @@ class BulkProcessor(QWidget):
         table_layout = QVBoxLayout(table_frame)
         table_layout.setContentsMargins(1, 1, 1, 1)
         table_layout.addWidget(self.results_table)
-        
+
         results_layout.addWidget(table_frame)
-        
+
         # Export section
         export_layout = QVBoxLayout()
-        
+
         export_label = QLabel("Export Options:", self)
         export_label.setStyleSheet("font-weight: bold; font-size: 16px; margin-top: 8px;")
         export_layout.addWidget(export_label)
-        
+
         export_buttons_layout = QHBoxLayout()
         export_buttons_layout.setSpacing(12)
-        
-        export_header_btn = QPushButton("Header Data", self)
-        export_header_btn.clicked.connect(lambda: self.export_data("header"))
-        export_header_btn.setStyleSheet(f"""
+
+        # Create a style for the Export button
+        export_btn_style = f"""
             QPushButton {{
-                background-color: #00B8A9;
+                background-color: #3498db;
                 color: white;
                 padding: 8px 16px;
                 border-radius: 6px;
@@ -727,57 +739,20 @@ class BulkProcessor(QWidget):
                 min-height: 36px;
             }}
             QPushButton:hover {{
-                background-color: #00A396;
+                background-color: #2980b9;
             }}
             QPushButton:pressed {{
-                background-color: #009688;
+                background-color: #2471a3;
                 padding-top: 9px;
                 padding-left: 17px;
             }}
-        """)
-        
-        export_items_btn = QPushButton("Item Data", self)
-        export_items_btn.clicked.connect(lambda: self.export_data("items"))
-        export_items_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: #00B8A9;
-                color: white;
-                padding: 8px 16px;
-                border-radius: 6px;
-                font-weight: bold;
-                min-height: 36px;
-            }}
-            QPushButton:hover {{
-                background-color: #00A396;
-            }}
-            QPushButton:pressed {{
-                background-color: #009688;
-                padding-top: 9px;
-                padding-left: 17px;
-            }}
-        """)
-        
-        export_summary_btn = QPushButton("Summary Data", self)
-        export_summary_btn.clicked.connect(lambda: self.export_data("summary"))
-        export_summary_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: #00B8A9;
-                color: white;
-                padding: 8px 16px;
-                border-radius: 6px;
-                font-weight: bold;
-                min-height: 36px;
-            }}
-            QPushButton:hover {{
-                background-color: #00A396;
-            }}
-            QPushButton:pressed {{
-                background-color: #009688;
-                padding-top: 9px;
-                padding-left: 17px;
-            }}
-        """)
-        
+        """
+
+        # Export button (combined export)
+        export_btn = QPushButton("Export", self)
+        export_btn.clicked.connect(lambda: self.export_data(None))  # Pass None to export all sections
+        export_btn.setStyleSheet(export_btn_style)
+
         validate_btn = QPushButton("Validate Data", self)
         validate_btn.clicked.connect(self.open_validation_screen)
         validate_btn.setStyleSheet(f"""
@@ -798,34 +773,81 @@ class BulkProcessor(QWidget):
                 padding-left: 17px;
             }}
         """)
-        
-        export_buttons_layout.addWidget(export_header_btn)
-        export_buttons_layout.addWidget(export_items_btn)
-        export_buttons_layout.addWidget(export_summary_btn)
-        export_buttons_layout.addWidget(validate_btn)
-        export_layout.addLayout(export_buttons_layout)
-        
+
+        # Create a layout for the export and validate buttons
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(12)
+        buttons_layout.addWidget(export_btn)
+        buttons_layout.addWidget(validate_btn)
+        export_layout.addLayout(buttons_layout)
+
         results_layout.addLayout(export_layout)
         right_layout.addWidget(results_card)
-        
+
         # Add right widget to splitter
         main_splitter.addWidget(right_widget)
-        
+
         # Set the splitter proportions
         main_splitter.setSizes([500, 500])
-        
+
         # Add splitter to main layout
         layout.addWidget(main_splitter)
-        
+
+        # Add license info at the bottom
+        layout.addWidget(self.license_info_label)
+
         self.setLayout(layout)
-    
+
+    def update_license_info(self):
+        """Update the license information display"""
+        license_info = self.license_manager.get_license_info()
+
+        if not license_info:
+            self.license_info_label.setVisible(False)
+            return
+
+        # Check if license has file limit
+        if "file_limit" in license_info:
+            file_limit = license_info["file_limit"]
+
+            # Create license info message
+            if file_limit == -1:
+                limit_text = "Unlimited files"
+            else:
+                limit_text = f"Up to {file_limit} files"
+
+            # Add edition if available
+            edition_text = ""
+            if "edition" in license_info:
+                edition_text = f" - {license_info['edition']} Edition"
+
+            # Add expiry info if available
+            expiry_text = ""
+            if "expiry_date" in license_info:
+                try:
+                    expiry_date = datetime.fromisoformat(license_info["expiry_date"])
+                    days_remaining = license_info.get("days_remaining", 0)
+
+                    if days_remaining > 30:
+                        expiry_text = f" - Valid until {expiry_date.strftime('%Y-%m-%d')}"
+                    elif days_remaining > 0:
+                        expiry_text = f" - Expires in {days_remaining} days"
+                    else:
+                        expiry_text = f" - License expired on {expiry_date.strftime('%Y-%m-%d')}"
+                except (ValueError, TypeError):
+                    pass
+
+            # Set the label text
+            self.license_info_label.setText(f"License: Bulk Processing: {limit_text}{edition_text}{expiry_text}")
+            self.license_info_label.setVisible(True)
+
     def load_templates(self):
         """Load templates from the database"""
         try:
             print("\nLoading templates for bulk processing...")
             conn = sqlite3.connect("invoice_templates.db")
             cursor = conn.cursor()
-            
+
             # Check if the templates table exists
             cursor.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name='templates'"
@@ -839,38 +861,38 @@ class BulkProcessor(QWidget):
                     "No template table found in the database. Please create templates first.",
                 )
                 return
-            
+
             # Get table columns to handle different database schemas
             cursor.execute("PRAGMA table_info(templates)")
             columns = cursor.fetchall()
             column_names = [col[1] for col in columns]
             print(f"Available template columns: {column_names}")
-            
+
             # Build query dynamically based on available columns
             select_columns = ["id"]
             if "name" in column_names:
                 select_columns.append("name")
             else:
                 select_columns.append("'Unnamed'")
-            
+
             if "template_type" in column_names:
                 select_columns.append("template_type")
             else:
                 select_columns.append("'single'")
-            
+
             if "page_count" in column_names:
                 select_columns.append("page_count")
             else:
                 select_columns.append("1")
-            
+
             query = f"SELECT {', '.join(select_columns)} FROM templates"
             print(f"Query: {query}")
-            
+
             # Execute the query
             cursor.execute(query)
             templates = cursor.fetchall()
             print(f"Found {len(templates)} templates")
-            
+
             # Print template details for debugging
             for template in templates:
                 template_id = template[0]
@@ -880,10 +902,10 @@ class BulkProcessor(QWidget):
                 print(
                     f"  Template: {template_id}, {template_name}, {template_type}, {page_count} pages"
                 )
-            
+
             # Clear and reload the combo box
             self.template_combo.clear()
-            
+
             if not templates:
                 print("No templates found in database")
                 self.template_combo.addItem("No templates available", None)
@@ -919,10 +941,10 @@ class BulkProcessor(QWidget):
                         "Multi-page support: No multi-page templates found"
                     )
                     self.multi_page_label.setStyleSheet("color: orange;")
-            
+
             conn.close()
             print("Finished loading templates")
-            
+
         except sqlite3.Error as e:
             error_msg = f"Database error while loading templates: {str(e)}"
             print(error_msg)
@@ -938,7 +960,7 @@ class BulkProcessor(QWidget):
             QMessageBox.critical(self, "Error", error_msg)
             self.multi_page_label.setText("Multi-page support: Error loading templates")
             self.multi_page_label.setStyleSheet("color: red;")
-    
+
     def process_files(self):
         """Process selected PDF files with the selected template"""
         # Validate files and template selection
@@ -951,6 +973,16 @@ class BulkProcessor(QWidget):
             QMessageBox.warning(self, "Warning", "Please select a template")
             return
 
+        # Check license file limit
+        license_manager = get_license_manager()
+        file_count = len(self.pdf_files)
+        is_allowed, message = license_manager.check_bulk_limit(file_count)
+
+        if not is_allowed:
+            QMessageBox.warning(self, "License Limit Exceeded",
+                               f"{message}\n\nYou are attempting to process {file_count} files.")
+            return
+
         # Reset counters and displays
         self.status_label.setText("Processing files...")
         self.results_table.setRowCount(0)
@@ -960,11 +992,11 @@ class BulkProcessor(QWidget):
         self.total_rows_count.setText("0")
         self.progress_bar.setMaximum(len(self.pdf_files))
         self.progress_bar.setValue(0)
-        
+
         # Reset stop flag and show stop button
         self.should_stop = False
         self.stop_button.setVisible(True)
-        
+
         # Start the timer
         self.start_time = time.time()
         self.processing_time_timer = QTimer(self)
@@ -977,14 +1009,14 @@ class BulkProcessor(QWidget):
             success_count = 0
             failed_count = 0
             total_rows = 0
-            
+
             # Process each PDF file
             for index, pdf_path in enumerate(self.pdf_files):
                 # Check if processing should stop
                 if self.should_stop:
                     self.status_label.setText("Processing stopped by user")
                     break
-                    
+
                 print(
                     f"\nProcessing file {index + 1}/{len(self.pdf_files)}: {pdf_path}"
                 )
@@ -1000,18 +1032,18 @@ class BulkProcessor(QWidget):
 
                     processed_count += 1
                     self.processed_count.setText(str(processed_count))
-                    
+
                     if results:
                         # Get template_type from the selected template name
                         template_display_text = self.template_combo.currentText()
                         template_type = "single"  # Default
                         if "Multi" in template_display_text:
                             template_type = "multi"
-                        
+
                         # Get the overall extraction status
                         extraction_status = results.get("extraction_status", {})
                         overall_status = extraction_status.get("overall", "failed")
-                        
+
                         # Store the results with correct page count and template type
                         self.processed_data[pdf_path] = {
                             "pdf_page_count": actual_page_count,  # Use actual page count from PDF
@@ -1046,7 +1078,7 @@ class BulkProcessor(QWidget):
                             for df in results.get("summary_tables", [])
                             if df is not None and not df.empty
                         )
-                        
+
                         # Set status based on overall extraction status
                         if overall_status == "success":
                             status_text = "Success"
@@ -1063,7 +1095,7 @@ class BulkProcessor(QWidget):
                                 partial_sections.append("Items")
                             if extraction_status.get("summary") in ["success", "partial"]:
                                 partial_sections.append("Summary")
-                            
+
                             status_text = f"Partial: {', '.join(partial_sections)}"
                             status_type = "partial"
                             # Update success counter but also track as partial
@@ -1077,7 +1109,7 @@ class BulkProcessor(QWidget):
                                 status_text = "Failed: No data extracted"
                             else:
                                 status_text = "Failed: Extraction errors"
-                            
+
                             status_type = "failed"
                             # Update failed counter
                             failed_count += 1
@@ -1086,7 +1118,7 @@ class BulkProcessor(QWidget):
                         status_item = QTableWidgetItem(status_text)
                         status_item.setData(Qt.UserRole, status_type)
                         self.results_table.setItem(row, 1, status_item)
-                        
+
                         # PDF Pages - Use actual page count
                         self.results_table.setItem(
                             row, 2, QTableWidgetItem(str(actual_page_count))
@@ -1106,7 +1138,7 @@ class BulkProcessor(QWidget):
                         self.results_table.setItem(
                             row, 5, QTableWidgetItem(str(summary_count))
                         )
-                        
+
                         # Update total rows counter
                         file_total_rows = header_count + item_count + summary_count
                         total_rows += file_total_rows
@@ -1118,15 +1150,15 @@ class BulkProcessor(QWidget):
                         self.results_table.setItem(
                             row, 0, QTableWidgetItem(os.path.basename(pdf_path))
                         )
-                        
+
                         status_item = QTableWidgetItem("Failed")
                         status_item.setData(Qt.UserRole, "failed")
                         self.results_table.setItem(row, 1, status_item)
-                        
+
                         # Update failed counter
                         failed_count += 1
                         self.failed_count.setText(str(failed_count))
-                        
+
                         self.results_table.setItem(
                             row, 2, QTableWidgetItem(str(actual_page_count))
                         )  # Still show actual page count
@@ -1139,7 +1171,7 @@ class BulkProcessor(QWidget):
                     import traceback
 
                     traceback.print_exc()
-                    
+
                     # Try to get page count even if processing failed
                     try:
                         with fitz.open(pdf_path) as pdf:
@@ -1153,17 +1185,17 @@ class BulkProcessor(QWidget):
                     self.results_table.setItem(
                         row, 0, QTableWidgetItem(os.path.basename(pdf_path))
                     )
-                    
+
                     status_item = QTableWidgetItem(f"Error: {str(e)}")
                     status_item.setData(Qt.UserRole, "failed")
                     self.results_table.setItem(row, 1, status_item)
-                    
+
                     # Update processed and failed counters
                     processed_count += 1
                     self.processed_count.setText(str(processed_count))
                     failed_count += 1
                     self.failed_count.setText(str(failed_count))
-                    
+
                     self.results_table.setItem(
                         row, 2, QTableWidgetItem(str(actual_page_count))
                     )
@@ -1174,13 +1206,13 @@ class BulkProcessor(QWidget):
                     # Update progress
                 self.progress_bar.setValue(index + 1)
                 QApplication.processEvents()  # Keep UI responsive
-                
+
             # Final update of processing time
             self.update_processing_time(is_final=True)
-            
+
             # Hide stop button when done
             self.stop_button.setVisible(False)
-            
+
             # Stop the processing timer
             self.processing_time_timer.stop()
 
@@ -1232,58 +1264,64 @@ class BulkProcessor(QWidget):
                     font-weight: bold;
                 """)
                 QMessageBox.critical(self, "Processing Failed", f"All {total_files} files failed to process. Please check logs for details.\nTotal time: {self.processing_time_label.text().replace('Total Time: ', '')}")
-                    
+
         except Exception as e:
             # Final update of processing time
             self.update_processing_time(is_final=True)
-            
+
             # Hide stop button when done
             self.stop_button.setVisible(False)
-            
+
             # Stop the processing timer
             if hasattr(self, 'processing_time_timer'):
                 self.processing_time_timer.stop()
-                
+
             print(f"Error in process_files: {str(e)}")
             import traceback
 
             traceback.print_exc()
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}\nTotal time: {self.processing_time_label.text().replace('Total Time: ', '')}")
             self.status_label.setText("Error occurred during processing")
-    
+
     def add_files(self):
         """Add PDF files to the list"""
         files, _ = QFileDialog.getOpenFileNames(
             self, "Select PDF Files", "", "PDF Files (*.pdf)"
         )
-        
+
         for file in files:
             if file not in self.pdf_files:
                 self.pdf_files.append(file)
                 self.file_list.addItem(os.path.basename(file))
-    
+
     def clear_files(self):
         """Clear the file list"""
         self.pdf_files.clear()
         self.file_list.clear()
         self.results_table.setRowCount(0)
         self.processed_data.clear()
-    
-    def export_data(self, section):
-        """Export processed data in JSON format"""
+
+    def export_data(self, section=None):
+        """Export processed data in JSON format
+        If section is None, export all sections in a single file
+        """
         if not self.processed_data:
             QMessageBox.warning(
                 self, "Warning", "No processed data available to export"
             )
             return
-            
+
         try:
             # Create export directory if it doesn't exist
             export_dir = "exported_data"
             os.makedirs(export_dir, exist_ok=True)
-            
+
             # Update status
-            self.status_label.setText(f"Exporting {section} data...")
+            if section:
+                self.status_label.setText(f"Exporting {section} data...")
+            else:
+                self.status_label.setText("Exporting all data...")
+
             self.status_label.setStyleSheet(f"""
                 padding: 4px 8px;
                 border-radius: 4px;
@@ -1292,7 +1330,7 @@ class BulkProcessor(QWidget):
                 font-weight: bold;
             """)
             QApplication.processEvents()  # Ensure UI updates
-            
+
             # Prepare data for export
             export_data = {}
 
@@ -1312,131 +1350,156 @@ class BulkProcessor(QWidget):
                     }
                 }
 
-                # Process section data based on the template type
-                print(f"\nExporting {section} data for {pdf_filename}")
-                
-                # Check if section exists in data
-                if section not in data:
-                    print(f"  No {section} data found for this file")
-                    file_data[section] = []
-                    continue
-                    
-                section_data = data[section]
-                
-                # Handle None or empty case
-                if section_data is None:
-                    print(f"  {section} data is None")
-                    file_data[section] = []
-                    continue
+                # If exporting a specific section only
+                if section:
+                    sections_to_process = [section]
+                else:
+                    # Export all sections
+                    sections_to_process = ["header", "items", "summary"]
+                    print(f"\nExporting all data for {pdf_filename}")
 
-                # Handle case where data is a list of dataframes (multiple tables)
-                if isinstance(section_data, list):
-                    print(f"  Processing list of {len(section_data)} table(s)")
+                # Process each section
+                for current_section in sections_to_process:
+                    # Process section data based on the template type
+                    print(f"  Processing {current_section} data for {pdf_filename}")
+
+                    # Check if section exists in data
+                    if current_section not in data:
+                        print(f"    No {current_section} data found for this file")
+                        file_data[current_section] = []
+                        continue
+
+                    section_data = data[current_section]
+
+                    # Handle None or empty case
+                    if section_data is None:
+                        print(f"    {current_section} data is None")
+                        file_data[current_section] = []
+                        continue
+
+                    # Handle case where data is a list of dataframes (multiple tables)
+                    if isinstance(section_data, list):
+                        print(f"    Processing list of {len(section_data)} table(s)")
                         # Create a combined dictionary with table indexes
-                    tables_dict = {}
-                    valid_tables = 0
-                    
-                    for i, df in enumerate(section_data):
-                        try:
-                            if df is None:
-                                print(f"  Table {i} is None, skipping")
-                                continue
-                                
-                            # Convert string to DataFrame if needed
-                            if isinstance(df, str):
-                                print(f"  Table {i} is a string, converting to DataFrame")
-                                df = pd.DataFrame([{"text": df}])
+                        tables_dict = {}
+                        valid_tables = 0
 
-                            if df.empty:
-                                print(f"  Table {i} is empty, skipping")
+                        for i, df in enumerate(section_data):
+                            try:
+                                if df is None:
+                                    print(f"    Table {i} is None, skipping")
+                                    continue
+
+                                # Convert string to DataFrame if needed
+                                if isinstance(df, str):
+                                    print(f"    Table {i} is a string, converting to DataFrame")
+                                    df = pd.DataFrame([{"text": df}])
+
+                                if df.empty:
+                                    print(f"    Table {i} is empty, skipping")
+                                    continue
+
+                                valid_tables += 1
+                                # Check if dataframe has page information
+                                if "pdf_page" in df.columns:
+                                    print(f"    Table {i} has page information, grouping by page")
+                                    # Group by page
+                                    page_data = {}
+                                    for page_num, page_df in df.groupby("pdf_page"):
+                                        page_num_int = int(page_num)
+                                        page_df = page_df.drop(columns=["pdf_page"])
+                                        page_data[f"page_{page_num_int}"] = page_df.to_dict(orient="records")
+                                        print(f"      Page {page_num_int}: {len(page_df)} rows")
+                                    tables_dict[f"table_{i}"] = page_data
+                                else:
+                                    # Single page data
+                                    print(f"    Table {i}: {len(df)} rows (no page info)")
+                                    tables_dict[f"table_{i}"] = df.to_dict(orient="records")
+                            except Exception as e:
+                                print(f"    Error processing table {i}: {str(e)}")
+                                import traceback
+                                traceback.print_exc()
+
+                        print(f"    Processed {valid_tables} valid tables")
+                        file_data[current_section] = tables_dict
+
+                    else:
+                        # Regular case - single dataframe or string
+                        try:
+                            if isinstance(section_data, str):
+                                print(f"    {current_section} data is a string, converting to DataFrame")
+                                section_data = pd.DataFrame([{"text": section_data}])
+
+                            if not hasattr(section_data, 'empty'):
+                                print(f"    {current_section} data is not a DataFrame, converting")
+                                # Try to convert to DataFrame if possible
+                                try:
+                                    section_data = pd.DataFrame(section_data)
+                                except:
+                                    print(f"    Cannot convert {current_section} data to DataFrame")
+                                    file_data[current_section] = [{"error": "Data format error"}]
+                                    continue
+
+                            if section_data.empty:
+                                print(f"    {current_section} DataFrame is empty")
+                                file_data[current_section] = []
                                 continue
-                                
-                            valid_tables += 1
-                            # Check if dataframe has page information
-                            if "pdf_page" in df.columns:
-                                print(f"  Table {i} has page information, grouping by page")
+
+                            rows = len(section_data)
+                            cols = len(section_data.columns)
+                            print(f"    {current_section} DataFrame has {rows} rows and {cols} columns")
+
+                            # Check if multi-page processing is needed
+                            if "pdf_page" in section_data.columns and template_type == "multi":
+                                print(f"    Multi-page processing for {current_section}")
                                 # Group by page
                                 page_data = {}
-                                for page_num, page_df in df.groupby("pdf_page"):
+                                for page_num, page_df in section_data.groupby("pdf_page"):
                                     page_num_int = int(page_num)
                                     page_df = page_df.drop(columns=["pdf_page"])
                                     page_data[f"page_{page_num_int}"] = page_df.to_dict(orient="records")
-                                    print(f"    Page {page_num_int}: {len(page_df)} rows")
-                                tables_dict[f"table_{i}"] = page_data
+                                    print(f"      Page {page_num_int}: {len(page_df)} rows")
+                                file_data[current_section] = page_data
                             else:
                                 # Single page data
-                                print(f"  Table {i}: {len(df)} rows (no page info)")
-                                tables_dict[f"table_{i}"] = df.to_dict(orient="records")
+                                if "pdf_page" in section_data.columns:
+                                    print(f"    Removing pdf_page column")
+                                    section_data = section_data.drop(columns=["pdf_page"])
+                                print(f"    Exporting as single-page data: {len(section_data)} rows")
+                                file_data[current_section] = section_data.to_dict(orient="records")
                         except Exception as e:
-                            print(f"  Error processing table {i}: {str(e)}")
+                            print(f"    Error processing {current_section} data: {str(e)}")
                             import traceback
                             traceback.print_exc()
-
-                    print(f"  Processed {valid_tables} valid tables")
-                    file_data[section] = tables_dict
-
-                else:
-                    # Regular case - single dataframe or string
-                    try:
-                        if isinstance(section_data, str):
-                            print(f"  {section} data is a string, converting to DataFrame")
-                            section_data = pd.DataFrame([{"text": section_data}])
-                        
-                        if not hasattr(section_data, 'empty'):
-                            print(f"  {section} data is not a DataFrame, converting")
-                            # Try to convert to DataFrame if possible
-                            try:
-                                section_data = pd.DataFrame(section_data)
-                            except:
-                                print(f"  Cannot convert {section} data to DataFrame")
-                                file_data[section] = [{"error": "Data format error"}]
-                                continue
-
-                        if section_data.empty:
-                            print(f"  {section} DataFrame is empty")
-                            file_data[section] = []
-                            continue
-                            
-                        rows = len(section_data)
-                        cols = len(section_data.columns)
-                        print(f"  {section} DataFrame has {rows} rows and {cols} columns")
-
-                        # Check if multi-page processing is needed
-                        if "pdf_page" in section_data.columns and template_type == "multi":
-                            print(f"  Multi-page processing for {section}")
-                            # Group by page
-                            page_data = {}
-                            for page_num, page_df in section_data.groupby("pdf_page"):
-                                page_num_int = int(page_num)
-                                page_df = page_df.drop(columns=["pdf_page"])
-                                page_data[f"page_{page_num_int}"] = page_df.to_dict(orient="records")
-                                print(f"    Page {page_num_int}: {len(page_df)} rows")
-                            file_data[section] = page_data
-                        else:
-                            # Single page data
-                            if "pdf_page" in section_data.columns:
-                                print(f"  Removing pdf_page column")
-                                section_data = section_data.drop(columns=["pdf_page"])
-                            print(f"  Exporting as single-page data: {len(section_data)} rows")
-                            file_data[section] = section_data.to_dict(orient="records")
-                    except Exception as e:
-                        print(f"  Error processing {section} data: {str(e)}")
-                        import traceback
-                        traceback.print_exc()
-                        file_data[section] = [{"error": str(e)}]
+                            file_data[current_section] = [{"error": str(e)}]
 
                 # Add the file data to the export
                 export_data[pdf_filename] = file_data
-            
+
             # Save to JSON file
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"{export_dir}/{section}_data_{timestamp}.json"
-            
+
+            # Get template name for the filename
+            template_name = self.template_combo.currentText()
+            # Clean the template name to make it suitable for a filename
+            clean_template_name = "".join(c if c.isalnum() else "_" for c in template_name)
+
+            if section:
+                filename = f"{export_dir}/{clean_template_name}_{section}_{timestamp}.json"
+                export_description = f"{section.title()} data"
+            else:
+                filename = f"{export_dir}/{clean_template_name}_{timestamp}.json"
+                export_description = "All data (header, items, and summary)"
+
             with open(filename, "w", encoding="utf-8") as f:
                 json.dump(export_data, f, indent=2, ensure_ascii=False)
-            
+
             # Reset status label to normal
-            self.status_label.setText(f"Exported {section} data successfully")
+            if section:
+                self.status_label.setText(f"Exported {section} data successfully")
+            else:
+                self.status_label.setText("Exported all data successfully")
+
             self.status_label.setStyleSheet(f"""
                 padding: 4px 8px;
                 border-radius: 4px;
@@ -1444,48 +1507,63 @@ class BulkProcessor(QWidget):
                 color: {self.theme['secondary']};
                 font-weight: bold;
             """)
-            
+
             # Create a custom success message box
             success_box = QMessageBox(self)
             success_box.setWindowTitle("Export Successful")
             success_box.setIcon(QMessageBox.Information)
-            
+
             # Calculate total rows exported
             total_exported_rows = 0
             total_exported_files = len(export_data)
-            
+            section_counts = {"header": 0, "items": 0, "summary": 0}
+
             for file_data in export_data.values():
-                section_content = file_data.get(section, {})
-                if isinstance(section_content, list):
-                    total_exported_rows += len(section_content)
-                elif isinstance(section_content, dict):
-                    for table_data in section_content.values():
-                        if isinstance(table_data, list):
-                            total_exported_rows += len(table_data)
-                        elif isinstance(table_data, dict):
-                            for page_data in table_data.values():
-                                if isinstance(page_data, list):
-                                    total_exported_rows += len(page_data)
-            
+                for sec in ["header", "items", "summary"]:
+                    section_content = file_data.get(sec, {})
+                    section_row_count = 0
+
+                    if isinstance(section_content, list):
+                        section_row_count = len(section_content)
+                    elif isinstance(section_content, dict):
+                        for table_data in section_content.values():
+                            if isinstance(table_data, list):
+                                section_row_count += len(table_data)
+                            elif isinstance(table_data, dict):
+                                for page_data in table_data.values():
+                                    if isinstance(page_data, list):
+                                        section_row_count += len(page_data)
+
+                    section_counts[sec] += section_row_count
+                    total_exported_rows += section_row_count
+
+            # Create section breakdown for the message
+            section_breakdown = ""
+            if not section:  # Only show breakdown for combined export
+                section_breakdown = "<br><b>Section breakdown:</b><br>"
+                for sec, count in section_counts.items():
+                    section_breakdown += f"• {sec.title()}: <b>{count}</b> rows<br>"
+
             success_box.setText(f"Data exported successfully to")
             success_box.setInformativeText(
                 f"<b>File:</b> {filename}<br><br>"
                 f"<b>Export details:</b><br>"
-                f"• Section: <b>{section.title()}</b><br>"
+                f"• Content: <b>{export_description}</b><br>"
                 f"• Files: <b>{total_exported_files}</b><br>"
-                f"• Rows: <b>{total_exported_rows}</b><br>"
+                f"• Total rows: <b>{total_exported_rows}</b><br>"
+                f"{section_breakdown}"
             )
-            
+
             # Open folder button
             open_folder_btn = success_box.addButton("Open Folder", QMessageBox.ActionRole)
             open_folder_btn.clicked.connect(lambda: os.startfile(os.path.abspath(export_dir)))
-            
+
             # OK button
             ok_btn = success_box.addButton(QMessageBox.Ok)
             ok_btn.setDefault(True)
-            
+
             success_box.exec()
-            
+
         except Exception as e:
             self.status_label.setText("Export error")
             self.status_label.setStyleSheet(f"""
@@ -1495,17 +1573,17 @@ class BulkProcessor(QWidget):
                 color: {self.theme['danger']};
                 font-weight: bold;
             """)
-            
+
             QMessageBox.critical(self, "Error", f"Failed to export data: {str(e)}")
             import traceback
 
             traceback.print_exc()
-    
+
     def navigate_back(self):
         """Return to the main screen"""
         self.go_back.emit()  # Emit the signal for parent to handle
         print("Emitted go_back signal")
-    
+
     def reset_screen(self):
         """Reset the screen to its initial state"""
         # Clear all data
@@ -1513,38 +1591,38 @@ class BulkProcessor(QWidget):
         self.file_list.clear()
         self.results_table.setRowCount(0)
         self.processed_data.clear()
-        
+
         # Reset progress bar
         self.progress_bar.setValue(0)
-        
+
         # Reset status label
         self.status_label.setText("Ready")
-        
+
         # Reset processing time label
         self.processing_time_label.setText("")
         self.start_time = None
-        
+
         # Stop any running timer
         if hasattr(self, 'processing_time_timer') and self.processing_time_timer.isActive():
             self.processing_time_timer.stop()
-        
+
         # Reset extraction statistics summary values
         self.processed_count.setText("0")
         self.success_count.setText("0")
         self.failed_count.setText("0")
         self.total_rows_count.setText("0")
-        
+
         # Reset template selection if needed
         if self.template_combo.count() > 0:
             self.template_combo.setCurrentIndex(0)
-        
+
         # Show confirmation message
         QMessageBox.information(
             self, "Screen Reset", "The screen has been reset to its initial state."
         )
-    
-        
-        
+
+
+
 
     def extract_invoice_tables(self, pdf_path, template_id):
         try:
@@ -1789,7 +1867,7 @@ class BulkProcessor(QWidget):
                         # For single page templates
                         current_regions = template_data.get("regions", {})
                         current_column_lines = template_data.get("column_lines", {})
-                        
+
                         # Debug column lines for single page templates
                         print(f"\nSingle-page template column lines:")
                         for section, lines in current_column_lines.items():
@@ -1797,7 +1875,7 @@ class BulkProcessor(QWidget):
                             if lines and len(lines) > 0:
                                 print(f"    First column line format: {type(lines[0])}")
                                 print(f"    Sample: {lines[0]}")
-                        
+
                         # Verify column_lines structure - it should be a dict with sections as keys
                         if not isinstance(current_column_lines, dict):
                             print(f"  WARNING: column_lines is not a dict: {type(current_column_lines)}")
@@ -1822,13 +1900,13 @@ class BulkProcessor(QWidget):
                         if section in current_regions and current_regions[section]:
                             section_regions = current_regions[section]
                             section_column_lines = current_column_lines.get(section, [])
-                            
+
                             print(
                                 f"\nExtracting {section} section from page {page_index + 1}"
                             )
                             print(f"  Found {len(section_regions)} region(s)")
                             print(f"  Found {len(section_column_lines)} column line(s)")
-                            
+
                             # Ensure section_column_lines is a list
                             if not isinstance(section_column_lines, list):
                                 print(f"  WARNING: section_column_lines is not a list: {type(section_column_lines)}")
@@ -1866,20 +1944,20 @@ class BulkProcessor(QWidget):
                                 # Create table area string
                                 table_area = f"{x1},{y1},{x2},{y2}"
                                 table_areas.append(table_area)
-                                
+
                                 # Process column lines for this region
                                 region_columns = []
-                                
+
                                 # Debug all column lines for this section
                                 print(f"  Processing column lines for region {region_idx} in {section} section")
                                 print(f"  Column lines count: {len(section_column_lines)}")
                                 print(f"  Column lines type: {type(section_column_lines)}")
-                                
+
                                 # Fix for single page templates: check structure of column lines
                                 if len(section_column_lines) == 0 and template_data["template_type"] == "single":
                                     print(f"  WARNING: No column lines found for {section} section in single page template")
                                     print(f"  Template data column_lines structure: {type(template_data.get('column_lines', {}))}")
-                                    
+
                                     # Try to directly access the column lines from the template data
                                     all_column_lines = template_data.get("column_lines", {})
                                     if isinstance(all_column_lines, dict) and section in all_column_lines:
@@ -1888,7 +1966,7 @@ class BulkProcessor(QWidget):
                                             print(f"  Found {len(direct_section_column_lines)} column lines directly in template data")
                                             section_column_lines = direct_section_column_lines
                                             print(f"  First entry type: {type(direct_section_column_lines[0])}")
-                                    
+
                                     # Also check if column_lines might be an array itself (format inconsistency)
                                     if isinstance(all_column_lines, list) and len(all_column_lines) > 0:
                                         print(f"  Column lines is a list with {len(all_column_lines)} entries")
@@ -1898,7 +1976,7 @@ class BulkProcessor(QWidget):
                                             if first_page_column_lines:
                                                 print(f"  Found {len(first_page_column_lines)} column lines in first page entry")
                                                 section_column_lines = first_page_column_lines
-                                
+
                                 for line in section_column_lines:
                                     # Handle different column line formats
                                     if isinstance(line, list):
@@ -1998,10 +2076,10 @@ class BulkProcessor(QWidget):
                                     if col_str:
                                         for col in col_str.split(","):
                                             all_columns.add(float(col))
-                                
+
                                 # Convert back to list and sort
                                 all_columns_list = sorted(list(all_columns))
-                                
+
                                 # Remove columns that are too close to each other (within 5 pixels)
                                 if len(all_columns_list) > 1:
                                     deduplicated_columns = [all_columns_list[0]]
@@ -2009,7 +2087,7 @@ class BulkProcessor(QWidget):
                                         if all_columns_list[i] - deduplicated_columns[-1] >= 5:  # 5 pixel threshold
                                             deduplicated_columns.append(all_columns_list[i])
                                     all_columns_list = deduplicated_columns
-                                
+
                                 # Format as string
                                 col_str = ",".join([str(x) for x in all_columns_list]) if all_columns_list else ""
                                 columns_list = [col_str]
@@ -2122,7 +2200,7 @@ class BulkProcessor(QWidget):
                                                 if hasattr(table_df, 'regex_status'):
                                                     results["extraction_status"]["header"] = table_df.regex_status
                                                 elif not table_df.empty:
-                                                    results["extraction_status"]["header"] = "success" 
+                                                    results["extraction_status"]["header"] = "success"
                                                 else:
                                                     results["extraction_status"]["header"] = "failed"
                                             elif section == "items":
@@ -2146,7 +2224,7 @@ class BulkProcessor(QWidget):
                                                 print(
                                                     f"  ✓ Extracted summary table with {len(table_df)} rows"
                                                 )
-                                           
+
                                 except Exception as e:
                                     print(f"  ✗ Error extracting table: {str(e)}")
                                     import traceback
@@ -2198,24 +2276,24 @@ class BulkProcessor(QWidget):
         """Stop the processing of files"""
         self.should_stop = True
         self.status_label.setText("Stopping processing...")
-        
+
     def update_processing_time(self, is_final=False):
         """Update the processing time display"""
         if self.start_time:
             elapsed_time = time.time() - self.start_time
             minutes, seconds = divmod(int(elapsed_time), 60)
             hours, minutes = divmod(minutes, 60)
-            
+
             if hours > 0:
                 time_str = f"Time: {hours}h {minutes}m {seconds}s"
             elif minutes > 0:
                 time_str = f"Time: {minutes}m {seconds}s"
             else:
                 time_str = f"Time: {seconds}s"
-                
+
             if is_final:
                 time_str = f"Total {time_str}"
-                
+
             self.processing_time_label.setText(time_str)
 
     def get_selected_template_id(self):
@@ -2223,123 +2301,183 @@ class BulkProcessor(QWidget):
         if self.template_combo.count() == 0:
             return None
         return self.template_combo.currentData()
-    
+
     def open_validation_screen(self):
         """Open the validation screen with the processed data"""
         if not self.processed_data:
             QMessageBox.warning(self, "Warning", "No data to validate. Please process files first.")
             return
-            
+
         # Create validation screen
         self.validation_screen = ValidationScreen(self)
         self.validation_screen.back_requested.connect(self.close_validation_screen)
-        
+
         # Convert processed data to DataFrame
         data_frames = []
         for pdf_path, data in self.processed_data.items():
             # Combine header, items, and summary data
             combined_data = {}
-            
+
             # Add header data
             if "header" in data and data["header"]:
                 for table in data["header"]:
                     if not table.empty:
                         for col in table.columns:
                             combined_data[f"header_{col}"] = table[col].iloc[0] if len(table) > 0 else ""
-            
+
             # Add items data
             if "items" in data and data["items"]:
                 for table in data["items"]:
                     if not table.empty:
                         for col in table.columns:
                             combined_data[f"items_{col}"] = table[col].iloc[0] if len(table) > 0 else ""
-            
+
             # Add summary data
             if "summary" in data and data["summary"]:
                 for table in data["summary"]:
                     if not table.empty:
                         for col in table.columns:
                             combined_data[f"summary_{col}"] = table[col].iloc[0] if len(table) > 0 else ""
-            
+
             # Add metadata
-            combined_data["pdf_file"] = os.path.basename(pdf_path)
-            combined_data["template_type"] = data.get("template_type", "single")
-            combined_data["pdf_page_count"] = data.get("pdf_page_count", 1)
-            
+            combined_data["metadata_filename"] = os.path.basename(pdf_path)
+            combined_data["metadata_template_type"] = data.get("template_type", "single")
+            combined_data["metadata_pdf_page_count"] = data.get("pdf_page_count", 1)
+
             data_frames.append(pd.DataFrame([combined_data]))
-        
+
         # Combine all data frames
         if data_frames:
             combined_df = pd.concat(data_frames, ignore_index=True)
             self.validation_screen.set_data(combined_df)
-            
+
             # Get selected template ID
             template_id = self.get_selected_template_id()
-            
+
             # Try to load validation rules from the template
             template_rules = self.get_template_validation_rules(template_id)
-            
+
             if template_rules:
                 # Set validation rules from template
                 self.validation_screen.validation_rules = template_rules
                 self.validation_screen.rules_list.setRowCount(0)  # Clear existing rules
-                
-                # Add rules to UI
+
+                # Count rules by section for the summary message
+                section_counts = {
+                    "header": 0,
+                    "items": 0,
+                    "summary": 0,
+                    "metadata": 0,
+                    "unknown": 0
+                }
+
+                # Add rules to UI with section highlighting
                 for field, rules in template_rules.items():
                     for rule in rules:
+                        # Determine section for the rule
+                        if "section" in rule:
+                            section_type = rule["section"]
+                        else:
+                            section_type = self.validation_screen.determine_section_type(field)
+
+                        # Update section counts
+                        section_counts[section_type] += 1
+
+                        # Add to UI list
                         row = self.validation_screen.rules_list.rowCount()
                         self.validation_screen.rules_list.insertRow(row)
-                        self.validation_screen.rules_list.setItem(row, 0, QTableWidgetItem(field))
-                        self.validation_screen.rules_list.setItem(row, 1, QTableWidgetItem(rule["type"]))
-                        self.validation_screen.rules_list.setItem(row, 2, QTableWidgetItem(rule["params"]))
-                
+
+                        # Create field item with appropriate styling
+                        field_item = QTableWidgetItem(field)
+                        field_item.setForeground(QColor(self.validation_screen.theme['dark']))
+
+                        # Set different background colors based on section type
+                        if section_type == "header":
+                            field_item.setBackground(QColor("#E6F4FF"))  # Light blue
+                            field_item.setToolTip(f"Section: Header")
+                        elif section_type == "items":
+                            field_item.setBackground(QColor("#E6FFEA"))  # Light green
+                            field_item.setToolTip(f"Section: Items")
+                        elif section_type == "summary":
+                            field_item.setBackground(QColor("#FFF0E6"))  # Light orange
+                            field_item.setToolTip(f"Section: Summary")
+                        elif section_type == "metadata":
+                            field_item.setBackground(QColor("#F5F5F5"))  # Light gray
+                            field_item.setToolTip(f"Section: Metadata")
+
+                        # Highlight template paths
+                        if '*' in field:
+                            field_item.setFont(QFont("Arial", 9, QFont.Bold))
+                            if field_item.toolTip():
+                                field_item.setToolTip(f"{field_item.toolTip()} - Template path with wildcards")
+                            else:
+                                field_item.setToolTip("Template path with wildcards")
+
+                        # Create rule type and params items
+                        rule_type_item = QTableWidgetItem(rule["type"])
+                        rule_type_item.setForeground(QColor(self.validation_screen.theme['dark']))
+
+                        params_item = QTableWidgetItem(rule["params"])
+                        params_item.setForeground(QColor(self.validation_screen.theme['dark']))
+
+                        self.validation_screen.rules_list.setItem(row, 0, field_item)
+                        self.validation_screen.rules_list.setItem(row, 1, rule_type_item)
+                        self.validation_screen.rules_list.setItem(row, 2, params_item)
+
+                # Create section summary for loaded rules
+                section_summary = ""
+                for section, count in section_counts.items():
+                    if count > 0:
+                        section_summary += f"• {section.title()}: {count} rules\n"
+
                 QMessageBox.information(
                     self,
                     "Template Rules Loaded",
-                    f"Validation rules from the selected template have been loaded.\n\n"
-                    f"These rules will be applied to the extracted data.",
+                    f"Loaded {sum(section_counts.values())} validation rules from the selected template.\n\n"
+                    f"Rules by section:\n{section_summary}\n"
+                    f"These rules will be applied to validate the extracted data."
                 )
             else:
                 # If no template rules, load rules from JSON file
                 self.validation_screen.load_rules()
-            
+
             # Show validation screen
             self.validation_screen.show()
             self.hide()
-    
+
     def get_template_validation_rules(self, template_id):
         """Get validation rules from a template"""
         if not template_id:
             return None
-            
+
         try:
             # Connect to database
             conn = sqlite3.connect("invoice_templates.db")
             cursor = conn.cursor()
-            
+
             # Check if validation_rules column exists
             cursor.execute("PRAGMA table_info(templates)")
             columns = cursor.fetchall()
             column_names = [col[1] for col in columns]
-            
+
             if "validation_rules" not in column_names:
                 print("Validation rules column does not exist in templates table")
                 conn.close()
                 return None
-            
+
             # Get validation rules for the template
             cursor.execute("SELECT validation_rules FROM templates WHERE id = ?", (template_id,))
             result = cursor.fetchone()
-            
+
             if not result or not result[0]:
                 print(f"No validation rules found for template ID {template_id}")
                 conn.close()
-                return None
-            
+            return None
+
             # Parse the validation rules
             validation_rules = json.loads(result[0])
             print(f"Loaded {len(validation_rules)} validation rules from template")
-            
+
             conn.close()
             return validation_rules
         except Exception as e:
@@ -2347,7 +2485,7 @@ class BulkProcessor(QWidget):
             import traceback
             traceback.print_exc()
             return None
-    
+
     def close_validation_screen(self):
         """Close the validation screen and return to bulk processor"""
         if hasattr(self, 'validation_screen'):

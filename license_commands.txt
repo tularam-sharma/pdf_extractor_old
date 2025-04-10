@@ -1,0 +1,14 @@
+# Generate a basic license
+python license_generator.py generate --edition basic
+
+# Generate a professional license with custom file limit
+python license_generator.py generate --edition professional --file-limit 1000
+
+# Generate a time-limited enterprise license
+python license_generator.py generate --edition enterprise --expiry-days 90
+
+# Generate a hardware-locked license
+python license_generator.py generate --edition professional --hardware-id "USER_HARDWARE_ID"
+
+# Generate a quick demo license
+python license_generator.py demo --days 30 --file-limit 10

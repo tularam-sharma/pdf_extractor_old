@@ -318,7 +318,28 @@ class ValidationScreen(QWidget):
                 background-color: {self.theme['primary_dark']};
             }}
         """)
-        rules_layout.addWidget(add_rule_btn)
+        
+        # Add a delete rule button
+        delete_rule_btn = QPushButton("Delete Selected Rule")
+        delete_rule_btn.clicked.connect(self.delete_selected_rule)
+        delete_rule_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {self.theme['danger']};
+                color: white;
+                padding: 8px 16px;
+                border-radius: 6px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: #DC2626;
+            }}
+        """)
+        
+        # Create a horizontal layout for the buttons
+        rule_buttons_layout = QHBoxLayout()
+        rule_buttons_layout.addWidget(add_rule_btn)
+        rule_buttons_layout.addWidget(delete_rule_btn)
+        rules_layout.addLayout(rule_buttons_layout)
         
         # Rules List
         self.rules_list = QTableWidget()
@@ -351,8 +372,104 @@ class ValidationScreen(QWidget):
         self.rules_list.verticalHeader().setDefaultSectionSize(30)  # Set row height
         self.rules_list.setShowGrid(True)
         self.rules_list.setAlternatingRowColors(True)
-        
+        self.rules_list.setSelectionBehavior(QTableWidget.SelectRows)  # Select entire rows
+        self.rules_list.setSelectionMode(QTableWidget.SingleSelection)  # Allow single selection
         rules_layout.addWidget(self.rules_list)
+        
+        # Add the template selection section after validation actions
+        # Create a separate widget for template selection
+        self.template_selection_widget = QWidget()
+        template_layout = QVBoxLayout(self.template_selection_widget)
+        template_layout.setContentsMargins(0, 8, 0, 8)
+        
+        # Template group title
+        template_title = QLabel("Template Selection")
+        template_title.setFont(QFont("Arial", 12, QFont.Bold))
+        template_title.setStyleSheet(f"color: {self.theme['dark']}; margin-bottom: 6px;")
+        template_layout.addWidget(template_title)
+        
+        # Template selector
+        template_selector_layout = QHBoxLayout()
+        template_label = QLabel("Select Template:")
+        template_label.setStyleSheet(f"color: {self.theme['text']};")
+        
+        self.template_combo = QComboBox()
+        self.template_combo.setStyleSheet(f"""
+            QComboBox {{
+                padding: 5px;
+                border: 1px solid {self.theme['border']};
+                border-radius: 4px;
+                background-color: white;
+                color: {self.theme['text']};
+            }}
+        """)
+        
+        # Refresh templates button
+        refresh_btn = QPushButton("⟳")
+        refresh_btn.setFixedSize(60, 30)
+        refresh_btn.setToolTip("Refresh template list")
+        refresh_btn.clicked.connect(self.load_templates)
+        refresh_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {self.theme['secondary']};
+                color: white;
+                border-radius: 4px;
+                font-weight: bold;
+                left: 10px;
+            }}
+        """)
+        
+        template_selector_layout.addWidget(template_label)
+        template_selector_layout.addWidget(self.template_combo, 1)  # Give combo box more space
+        template_selector_layout.addWidget(refresh_btn)
+        template_layout.addLayout(template_selector_layout)
+        
+        # # Save to template button
+        # save_to_template_btn = QPushButton("Save Rules to Selected Template")
+        # save_to_template_btn.clicked.connect(self.save_rules_to_template)
+        # save_to_template_btn.setStyleSheet(f"""
+        #     QPushButton {{
+        #         background-color: {self.theme['primary']};
+        #         color: white;
+        #         padding: 8px 16px;
+        #         border-radius: 6px;
+        #         font-weight: bold;
+        #         margin-top: 8px;
+        #     }}
+        #     QPushButton:hover {{
+        #         background-color: {self.theme['primary_dark']};
+        #     }}
+        # """)
+        # template_layout.addWidget(save_to_template_btn)
+        
+        # # Load from template button
+        # load_from_template_btn = QPushButton("Load Rules from Selected Template")
+        # load_from_template_btn.clicked.connect(self.load_rules_from_template)
+        # load_from_template_btn.setStyleSheet(f"""
+        #     QPushButton {{
+        #         background-color: {self.theme['tertiary']};
+        #         color: white;
+        #         padding: 8px 16px;
+        #         border-radius: 6px;
+        #         font-weight: bold;
+        #         margin-top: 8px;
+        #     }}
+        #     QPushButton:hover {{
+        #         background-color: #7C3AED;
+        #     }}
+        # """)
+        # template_layout.addWidget(load_from_template_btn)
+        
+        # Add a divider
+        divider = QFrame()
+        divider.setFrameShape(QFrame.HLine)
+        divider.setFrameShadow(QFrame.Sunken)
+        divider.setStyleSheet(f"background-color: {self.theme['border']}; margin-top: 12px; margin-bottom: 12px;")
+        template_layout.addWidget(divider)
+        
+        # Always show template selection section regardless of parent
+        left_layout.addWidget(self.template_selection_widget)
+        self.load_templates()  # Load available templates
         
         left_layout.addWidget(rules_group)
         
@@ -425,67 +542,6 @@ class ValidationScreen(QWidget):
                 background-color: #0F172A;
             }}
         """)
-        
-        # Save Rules to Template - Add dropdown for template selection
-        if hasattr(self.parent, 'get_selected_template_id'):
-            # Template Selection Group
-            template_group = QGroupBox("Template Selection")
-            template_group.setStyleSheet(f"""
-                QGroupBox {{
-                    background-color: white;
-                    border-radius: 8px;
-                    border: 1px solid {self.theme['border']};
-                    padding: 16px;
-                    font-weight: bold;
-                    color: {self.theme['dark']};
-                }}
-                QGroupBox::title {{
-                    subcontrol-origin: margin;
-                    left: 16px;
-                    padding: 0 5px 0 5px;
-                    color: {self.theme['dark']};
-                    background-color: white;
-                }}
-            """)
-            template_layout = QVBoxLayout(template_group)
-            
-            # Template selector
-            template_label = QLabel("Select Template:")
-            template_label.setStyleSheet(f"color: {self.theme['text']};")
-            
-            self.template_combo = QComboBox()
-            self.template_combo.setStyleSheet(f"""
-                QComboBox {{
-                    padding: 5px;
-                    border: 1px solid {self.theme['border']};
-                    border-radius: 4px;
-                    background-color: white;
-                    color: {self.theme['text']};
-                }}
-            """)
-            self.load_templates()  # Load available templates
-            
-            template_layout.addWidget(template_label)
-            template_layout.addWidget(self.template_combo)
-            
-            # Save to template button
-            save_to_template_btn = QPushButton("Save Rules to Template")
-            save_to_template_btn.clicked.connect(self.save_rules_to_template)
-            save_to_template_btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {self.theme['primary']};
-                    color: white;
-                    padding: 8px 16px;
-                    border-radius: 6px;
-                    font-weight: bold;
-                }}
-                QPushButton:hover {{
-                    background-color: {self.theme['primary_dark']};
-                }}
-            """)
-            template_layout.addWidget(save_to_template_btn)
-            
-            left_layout.addWidget(template_group)
         
         rules_actions_layout.addWidget(save_rules_btn)
         rules_actions_layout.addWidget(load_rules_btn)
@@ -891,6 +947,41 @@ class ValidationScreen(QWidget):
             
         return paths
     
+    def determine_section_type(self, path):
+        """Determine which section a path belongs to based on path components"""
+        path_lower = path.lower()
+        
+        # Check explicit section markers in the path
+        if '.header.' in path_lower or path_lower.endswith('.header'):
+            return "header"
+        elif '.items.' in path_lower or path_lower.endswith('.items') or '[items]' in path_lower:
+            return "items"
+        elif '.summary.' in path_lower or path_lower.endswith('.summary'):
+            return "summary"
+        elif '.metadata.' in path_lower or path_lower.endswith('.metadata'):
+            return "metadata"
+            
+        # If using underscore notation (for DataFrame columns)
+        if '_header_' in path_lower or path_lower.startswith('header_'):
+            return "header"
+        elif '_items_' in path_lower or path_lower.startswith('items_'):
+            return "items"
+        elif '_summary_' in path_lower or path_lower.startswith('summary_'):
+            return "summary"
+        elif '_metadata_' in path_lower or path_lower.startswith('metadata_'):
+            return "metadata"
+            
+        # Try to infer from context
+        if 'invoice' in path_lower or 'date' in path_lower or 'number' in path_lower:
+            return "header"
+        elif 'total' in path_lower or 'sum' in path_lower or 'tax' in path_lower:
+            return "summary"
+        elif 'quantity' in path_lower or 'price' in path_lower or 'item' in path_lower or 'product' in path_lower:
+            return "items"
+            
+        # Default to unknown
+        return "unknown"
+    
     def add_validation_rule(self):
         """Add a new validation rule"""
         field = self.field_combo.currentText()
@@ -904,15 +995,37 @@ class ValidationScreen(QWidget):
         # Check if this is a template path (contains *)
         is_template = '*' in field
         
+        # Determine section type based on path
+        section_type = self.determine_section_type(field)
+        
         # Add rule to the rules list
         row = self.rules_list.rowCount()
         self.rules_list.insertRow(row)
         
         field_item = QTableWidgetItem(field)
         field_item.setForeground(QColor(self.theme['dark']))
+        
+        # Set different background colors based on section type
+        if section_type == "header":
+            field_item.setBackground(QColor("#E6F4FF"))  # Light blue
+            field_item.setToolTip(f"Section: Header")
+        elif section_type == "items":
+            field_item.setBackground(QColor("#E6FFEA"))  # Light green
+            field_item.setToolTip(f"Section: Items")
+        elif section_type == "summary":
+            field_item.setBackground(QColor("#FFF0E6"))  # Light orange
+            field_item.setToolTip(f"Section: Summary")
+        elif section_type == "metadata":
+            field_item.setBackground(QColor("#F5F5F5"))  # Light gray
+            field_item.setToolTip(f"Section: Metadata")
+        
+        # If template path, add additional highlight
         if is_template:
-            field_item.setBackground(QColor(self.theme['light']))
-            field_item.setToolTip("This is a template path with wildcards")
+            field_item.setFont(QFont("Arial", 9, QFont.Bold))
+            if field_item.toolTip():
+                field_item.setToolTip(f"{field_item.toolTip()} - Template path with wildcards")
+            else:
+                field_item.setToolTip("Template path with wildcards")
         
         rule_type_item = QTableWidgetItem(rule_type)
         rule_type_item.setForeground(QColor(self.theme['dark']))
@@ -924,17 +1037,25 @@ class ValidationScreen(QWidget):
         self.rules_list.setItem(row, 1, rule_type_item)
         self.rules_list.setItem(row, 2, params_item)
         
-        # Store rule in validation_rules
+        # Store rule in validation_rules with section information
         if field not in self.validation_rules:
             self.validation_rules[field] = []
             
         self.validation_rules[field].append({
             "type": rule_type,
-            "params": params
+            "params": params,
+            "section": section_type
         })
         
         # Clear input fields
         self.rule_params.clear()
+        
+        # Show success message with section information
+        QMessageBox.information(
+            self, 
+            "Rule Added", 
+            f"Validation rule added successfully to the {section_type.upper()} section."
+        )
     
     def clear_rules(self):
         """Clear all validation rules"""
@@ -950,9 +1071,35 @@ class ValidationScreen(QWidget):
         # Reset all item colors
         self.reset_all_tree_item_colors(self.json_tree.invisibleRootItem())
         
-        validation_issues = []
-        validation_count = 0
+        # Structure to track validation issues by section
+        validation_issues = {
+            "header": [],
+            "items": [],
+            "summary": [],
+            "metadata": [],
+            "unknown": []
+        }
+        
+        # Track validation counts by section
+        validation_counts = {
+            "header": 0,
+            "items": 0,
+            "summary": 0,
+            "metadata": 0,
+            "unknown": 0
+        }
+        
+        # Track issue counts by section
+        issue_counts = {
+            "header": 0,
+            "items": 0,
+            "summary": 0,
+            "metadata": 0,
+            "unknown": 0
+        }
+        
         total_validations = 0
+        total_issues = 0
         
         # Apply validation rules
         for json_path, rules in self.validation_rules.items():
@@ -960,7 +1107,11 @@ class ValidationScreen(QWidget):
             if '*' in json_path:
                 matching_paths = self.find_paths_matching_template(json_path)
                 if not matching_paths:
-                    validation_issues.append(f"No paths match template: {json_path}")
+                    # Determine which section this path belongs to
+                    section = self.determine_section_type(json_path)
+                    validation_issues[section].append(f"No paths match template: {json_path}")
+                    issue_counts[section] += 1
+                    total_issues += 1
                     continue
                 
                 # Apply rules to all matching paths
@@ -975,20 +1126,31 @@ class ValidationScreen(QWidget):
                         rule_type = rule["type"]
                         params = rule["params"]
                         
+                        # Get section from rule or determine from path
+                        section = rule.get("section", self.determine_section_type(actual_path))
+                        
                         for i in range(len(self.modified_data)):
                             total_validations += 1
+                            validation_counts[section] += 1
+                            
                             value = str(self.modified_data.iloc[i, col_index])
                             is_valid = self.validate_value(value, rule_type, params, i)
                             
                             if not is_valid:
                                 self.highlight_tree_item(actual_path, value, self.theme["danger"])
-                                validation_issues.append(f"Row {i+1}, Path '{actual_path}': Failed {rule_type} validation")
+                                validation_issues[section].append(f"Row {i+1}, Path '{actual_path}': Failed {rule_type} validation")
+                                issue_counts[section] += 1
+                                total_issues += 1
             else:
                 # Regular path (no wildcards)
                 column_name = self.find_closest_column_name(json_path)
                 
                 if not column_name or column_name not in self.modified_data.columns:
-                    validation_issues.append(f"Path not found: {json_path}")
+                    # Determine which section this path belongs to
+                    section = self.determine_section_type(json_path)
+                    validation_issues[section].append(f"Path not found: {json_path}")
+                    issue_counts[section] += 1
+                    total_issues += 1
                     continue
                     
                 col_index = self.modified_data.columns.get_loc(column_name)
@@ -997,31 +1159,75 @@ class ValidationScreen(QWidget):
                     rule_type = rule["type"]
                     params = rule["params"]
                     
+                    # Get section from rule or determine from path
+                    section = rule.get("section", self.determine_section_type(json_path))
+                    
                     for i in range(len(self.modified_data)):
                         total_validations += 1
+                        validation_counts[section] += 1
+                        
                         value = str(self.modified_data.iloc[i, col_index])
                         is_valid = self.validate_value(value, rule_type, params, i)
                         
                         if not is_valid:
                             self.highlight_tree_item(json_path, value, self.theme["danger"])
-                            validation_issues.append(f"Row {i+1}, Path '{json_path}': Failed {rule_type} validation")
+                            validation_issues[section].append(f"Row {i+1}, Path '{json_path}': Failed {rule_type} validation")
+                            issue_counts[section] += 1
+                            total_issues += 1
         
-        # Show validation results
-        if validation_issues:
-            issues_text = "\n".join(validation_issues[:20])
-            if len(validation_issues) > 20:
-                issues_text += f"\n... and {len(validation_issues) - 20} more issues"
-                
-            QMessageBox.warning(
-                self, 
-                "Validation Issues", 
-                f"Found {len(validation_issues)} issues out of {total_validations} validations:\n\n{issues_text}"
+        # Format the detailed validation results message
+        if total_issues > 0:
+            # Create a detailed message with sections
+            sections_with_issues = []
+            
+            for section, issues in validation_issues.items():
+                if issues:
+                    section_title = section.upper()
+                    issues_text = "\n".join([f"• {issue}" for issue in issues[:5]])
+                    
+                    if len(issues) > 5:
+                        issues_text += f"\n  ... and {len(issues) - 5} more {section} issues"
+                    
+                    section_summary = f"{section_title} SECTION: {len(issues)} issues out of {validation_counts[section]} validations\n{issues_text}"
+                    sections_with_issues.append(section_summary)
+            
+            detailed_message = "\n\n".join(sections_with_issues)
+            
+            # Create custom dialog for validation results
+            result_dialog = QMessageBox(self)
+            result_dialog.setWindowTitle("Validation Results")
+            result_dialog.setIcon(QMessageBox.Warning)
+            
+            # Set dialog text
+            result_dialog.setText(f"<h3>Validation Issues Found</h3>")
+            result_dialog.setInformativeText(
+                f"<p>Found <b>{total_issues}</b> issues out of <b>{total_validations}</b> validations.</p>"
+                f"<p>Issues by section:</p>"
+                f"<ul>"
+                f"<li><b>Header:</b> {issue_counts['header']} issues / {validation_counts['header']} validations</li>"
+                f"<li><b>Items:</b> {issue_counts['items']} issues / {validation_counts['items']} validations</li>"
+                f"<li><b>Summary:</b> {issue_counts['summary']} issues / {validation_counts['summary']} validations</li>"
+                f"<li><b>Metadata:</b> {issue_counts['metadata']} issues / {validation_counts['metadata']} validations</li>"
+                f"</ul>"
             )
+            
+            # Add detailed text
+            result_dialog.setDetailedText(detailed_message)
+            
+            # Show the dialog
+            result_dialog.exec()
         else:
+            # Create section summary for successful validation
+            section_summary = ""
+            for section, count in validation_counts.items():
+                if count > 0:
+                    section_summary += f"• {section.title()}: {count} validations\n"
+            
             QMessageBox.information(
                 self, 
                 "Validation Successful", 
-                f"All {total_validations} validations passed successfully!"
+                f"All {total_validations} validations passed successfully!\n\n"
+                f"Validations by section:\n{section_summary}"
             )
     
     def find_closest_column_name(self, json_path):
@@ -1034,6 +1240,36 @@ class ValidationScreen(QWidget):
         normalized_path = json_path.replace('.', '_').replace('[', '_').replace(']', '')
         if normalized_path in self.modified_data.columns:
             return normalized_path
+        
+        # Fix for paths that include indexed items like [0]
+        # This is especially for paths like: TXA2449341-GU01A.pdf.header.table_0.page_1[0].invoice_number
+        if "[" in json_path and "]" in json_path:
+            # Create variations of the path with different index handling
+            variations = []
+            
+            # Variation 1: Remove brackets completely
+            variations.append(json_path.replace("[", "").replace("]", ""))
+            
+            # Variation 2: Replace [n] with _n
+            index_pattern = r'\[(\d+)\]'
+            variations.append(re.sub(index_pattern, r'_\1', json_path))
+            
+            # Variation 3: Replace entire [n] with nothing
+            variations.append(re.sub(index_pattern, '', json_path))
+            
+            # Try all variations with underscore normalization
+            for var in variations:
+                var_normalized = var.replace('.', '_')
+                if var_normalized in self.modified_data.columns:
+                    return var_normalized
+                
+                # Try with trimming the last part (for paths ending with index)
+                if var.endswith(']'):
+                    last_bracket = var.rindex('[')
+                    var_trimmed = var[:last_bracket]
+                    var_trimmed_normalized = var_trimmed.replace('.', '_')
+                    if var_trimmed_normalized in self.modified_data.columns:
+                        return var_trimmed_normalized
         
         # Check if it's a wildcard path with filename
         if '.' in json_path:
@@ -1054,12 +1290,17 @@ class ValidationScreen(QWidget):
                     col_parts = col.split('_')
                     if len(col_parts) >= len(parts):
                         # Skip the first part (filename) and match the rest
-                        if '_'.join(col_parts[1:]) == '_'.join(parts[1:]).replace('.', '_'):
+                        if '_'.join(col_parts[1:]) == '_'.join(parts[1:]).replace('.', '_').replace('[', '_').replace(']', ''):
                             return col
+        
+        # Debug info - print columns to help diagnose issues
+        print(f"Path not found: {json_path}")
+        print(f"Normalized path: {normalized_path}")
+        print(f"Available columns: {', '.join(self.modified_data.columns[:10])}...")
                             
         # Fallback: Check if it's a subpath
         for col in self.modified_data.columns:
-            if json_path in col or col.endswith(json_path.replace('.', '_')):
+            if json_path in col or col.endswith(json_path.replace('.', '_').replace('[', '_').replace(']', '')):
                 return col
                 
         return None
@@ -1092,9 +1333,11 @@ class ValidationScreen(QWidget):
                     components.append(current)
                     current = ""
                 in_bracket = True
+                current += c
             elif c == ']':
+                current += c
                 if current:
-                    components.append(f"[{current}]")
+                    components.append(current)
                     current = ""
                 in_bracket = False
             else:
@@ -1102,6 +1345,9 @@ class ValidationScreen(QWidget):
                 
         if current:
             components.append(current)
+        
+        # Print debug info
+        print(f"Path components: {components}")
         
         # Find items in different ways to handle variable filenames
         found_items = []
@@ -1111,9 +1357,24 @@ class ValidationScreen(QWidget):
         found_items.extend(exact_matches)
         
         # 2. If path contains dots (likely nested structure)
-        if '.' in path and not found_items:
+        if not found_items:
             # Try matching individual components recursively
             self._find_matching_items(self.json_tree.invisibleRootItem(), components, 0, found_items)
+        
+        # 3. Try by searching for the file and then the rest of the path
+        if not found_items and len(components) > 1 and components[0].endswith('.pdf'):
+            # Find the file node first
+            file_items = []
+            self._find_file_items(self.json_tree.invisibleRootItem(), components[0], file_items)
+            
+            # If file found, look for the path under it
+            for file_item in file_items:
+                rest_components = components[1:]
+                self._find_matching_items(file_item, rest_components, 0, found_items)
+        
+        # If still no matches, try looser matching
+        if not found_items:
+            self._find_loose_matching_items(self.json_tree.invisibleRootItem(), path, found_items)
         
         # If found items, highlight them
         if found_items:
@@ -1132,13 +1393,57 @@ class ValidationScreen(QWidget):
                 while parent:
                     parent.setExpanded(True)
                     parent = parent.parent()
-                    
+        else:
+            print(f"No tree items found for path: {path}")
+    
+    def _find_file_items(self, node, filename, found_items):
+        """Find items matching a filename"""
+        for i in range(node.childCount()):
+            child = node.child(i)
+            # Check if this node is the file
+            if child.text(0) == filename or child.text(1) == filename:
+                found_items.append(child)
+            # Check children recursively
+            self._find_file_items(child, filename, found_items)
+    
+    def _find_loose_matching_items(self, node, path, found_items):
+        """Try to find items matching parts of the path"""
+        path_parts = path.replace('[', '.').replace(']', '').split('.')
+        last_part = path_parts[-1]
+        
+        for i in range(node.childCount()):
+            child = node.child(i)
+            
+            # Check if this node matches the last part of the path
+            if child.text(0) == last_part:
+                found_items.append(child)
+                
+            # If this is a leaf with a value, check the value too
+            if child.childCount() == 0 and child.text(1) and child.text(1) == last_part:
+                found_items.append(child)
+                
+            # Check children recursively
+            self._find_loose_matching_items(child, path, found_items)
+            
     def _find_matching_items(self, node, path_components, current_index, found_items):
         """Recursively find items matching path components"""
         if current_index >= len(path_components):
             return
             
         current_component = path_components[current_index]
+        
+        # Debug info
+        print(f"Looking for component: {current_component} at index {current_index}")
+        
+        # Handle array indices specially
+        is_array_index = current_component.startswith('[') and current_component.endswith(']')
+        array_index = -1
+        if is_array_index:
+            try:
+                array_index = int(current_component[1:-1])
+                print(f"Array index: {array_index}")
+            except ValueError:
+                pass
         
         # Special handling for the first component which might be a variable filename
         if current_index == 0 and current_component.endswith('.pdf'):
@@ -1151,11 +1456,30 @@ class ValidationScreen(QWidget):
                         found_items.append(child)
                     else:
                         self._find_matching_items(child, path_components, current_index + 1, found_items)
+        elif is_array_index and array_index >= 0:
+            # Handle array indices - find the Nth child that's relevant
+            matched_items = []
+            for i in range(node.childCount()):
+                child = node.child(i)
+                # In arrays, items are often named like "Item 0", "Item 1"
+                if child.text(0).startswith("Item ") or child.text(3).endswith(f"[{array_index}]"):
+                    matched_items.append(child)
+            
+            # If we found enough items, use the one at the specified index
+            if array_index < len(matched_items):
+                child = matched_items[array_index]
+                if current_index == len(path_components) - 1:
+                    found_items.append(child)
+                else:
+                    self._find_matching_items(child, path_components, current_index + 1, found_items)
         else:
             # Regular matching for non-first components
             for i in range(node.childCount()):
                 child = node.child(i)
-                if child.text(0) == current_component or child.text(3).endswith(current_component):
+                if (child.text(0) == current_component or 
+                    child.text(3).endswith(current_component) or
+                    (current_component.isdigit() and child.text(0) == f"Item {current_component}")):
+                    
                     if current_index == len(path_components) - 1:
                         found_items.append(child)
                     else:
@@ -1292,12 +1616,41 @@ class ValidationScreen(QWidget):
         self.back_requested.emit()
         
     def save_rules(self):
-        """Save validation rules to JSON file"""
+        """Save validation rules to JSON file or selected template"""
         if not self.validation_rules:
             QMessageBox.warning(self, "Warning", "No rules to save")
             return
             
+        # Ask user if they want to save to file or template
+        if hasattr(self, 'template_combo') and self.template_combo.count() > 0 and self.template_combo.isEnabled():
+            choice = QMessageBox.question(
+                self, 
+                "Save Rules", 
+                "Do you want to save rules to a template or to a file?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Yes
+            )
+            
+            if choice == QMessageBox.StandardButton.Yes:
+                # Save to template
+                self.save_rules_to_template()
+                return
+            elif choice == QMessageBox.StandardButton.Cancel:
+                return
+        
+        # Save to file
         try:
+            # Ask for file path
+            file_path, _ = QFileDialog.getSaveFileName(
+                self,
+                "Save Rules",
+                "",
+                "JSON Files (*.json)"
+            )
+            
+            if not file_path:
+                return
+                
             # Convert rules to serializable format
             serialized_rules = {}
             for field, rules in self.validation_rules.items():
@@ -1309,21 +1662,52 @@ class ValidationScreen(QWidget):
                     })
             
             # Save to file
-            with open(self.rules_file_path, 'w') as f:
+            with open(file_path, 'w') as f:
                 json.dump(serialized_rules, f, indent=4)
                 
-            QMessageBox.information(self, "Success", "Rules saved successfully")
+            QMessageBox.information(self, "Success", f"Rules saved successfully to file: {file_path}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error saving rules: {str(e)}")
     
     def load_rules(self, silent=False):
-        """Load validation rules from JSON file"""
-        try:
-            if not os.path.exists(self.rules_file_path):
-                # No rules file exists yet
+        """Load validation rules from a template or file"""
+        # Ask user if they want to load from file or template
+        if hasattr(self, 'template_combo') and self.template_combo.count() > 0 and self.template_combo.isEnabled() and not silent:
+            choice = QMessageBox.question(
+                self, 
+                "Load Rules", 
+                "Do you want to load rules from a template or from a file?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Yes
+            )
+            
+            if choice == QMessageBox.StandardButton.Yes:
+                # Load from template
+                self.load_rules_from_template()
                 return
+            elif choice == QMessageBox.StandardButton.Cancel:
+                return
+        
+        # Load from file
+        try:
+            if silent:
+                # Use default file path during initialization
+                file_path = self.rules_file_path
+                if not os.path.exists(file_path):
+                    return
+            else:
+                # Ask for file path
+                file_path, _ = QFileDialog.getOpenFileName(
+                    self,
+                    "Load Rules",
+                    "",
+                    "JSON Files (*.json)"
+                )
                 
-            with open(self.rules_file_path, 'r') as f:
+                if not file_path:
+                    return
+                
+            with open(file_path, 'r') as f:
                 loaded_rules = json.load(f)
             
             # Clear existing rules
@@ -1340,30 +1724,191 @@ class ValidationScreen(QWidget):
                         "params": rule["params"]
                     })
                     
-                    # Add to UI list with explicit text color
+                    # Add to UI list
+                    row = self.rules_list.rowCount()
+                    self.rules_list.insertRow(row)
+                    
+                    field_item = QTableWidgetItem(field)
+                    field_item.setForeground(QColor(self.theme['dark']))
+                    if '*' in field:
+                        field_item.setBackground(QColor(self.theme['light']))
+                        field_item.setToolTip("This is a template path with wildcards")
+                    
+                    rule_type_item = QTableWidgetItem(rule["type"])
+                    rule_type_item.setForeground(QColor(self.theme['dark']))
+                    
+                    params_item = QTableWidgetItem(rule["params"])
+                    params_item.setForeground(QColor(self.theme['dark']))
+                    
+                    self.rules_list.setItem(row, 0, field_item)
+                    self.rules_list.setItem(row, 1, rule_type_item)
+                    self.rules_list.setItem(row, 2, params_item)
+                    
+            if not silent and self.validation_rules:
+                QMessageBox.information(self, "Success", f"Rules loaded successfully from file: {file_path}")
+        except Exception as e:
+            if not silent:
+                QMessageBox.critical(self, "Error", f"Error loading rules: {str(e)}")
+            
+    def load_rules_from_template(self):
+        """Load validation rules from the selected template"""
+        if not hasattr(self, 'template_combo') or self.template_combo.count() == 0:
+            QMessageBox.warning(self, "Warning", "No templates available")
+            return
+            
+        # Get the selected template ID from the combo box
+        template_id = self.template_combo.currentData()
+        template_name = self.template_combo.currentText()
+        
+        if not template_id:
+            QMessageBox.warning(self, "Warning", "No template selected")
+            return
+            
+        try:
+            # Connect to database
+            import sqlite3
+            conn = sqlite3.connect("invoice_templates.db")
+            cursor = conn.cursor()
+            
+            # Verify template exists
+            cursor.execute("SELECT id FROM templates WHERE id = ?", (template_id,))
+            if not cursor.fetchone():
+                QMessageBox.warning(self, "Warning", f"Template with ID {template_id} not found")
+                conn.close()
+                return
+            
+            # Check if validation_rules column exists
+            cursor.execute("PRAGMA table_info(templates)")
+            columns = cursor.fetchall()
+            column_names = [col[1] for col in columns]
+            
+            if "validation_rules" not in column_names:
+                QMessageBox.warning(self, "Warning", "No validation rules found in the database schema")
+                conn.close()
+                return
+                
+            # Get the validation rules for the template
+            cursor.execute("SELECT validation_rules FROM templates WHERE id = ?", (template_id,))
+            result = cursor.fetchone()
+            conn.close()
+            
+            if not result or not result[0]:
+                QMessageBox.warning(self, "Warning", f"No validation rules found for template: {template_name}")
+                return
+            
+            # Try to parse the rules
+            try:
+                loaded_rules = json.loads(result[0])
+            except json.JSONDecodeError:
+                QMessageBox.critical(self, "Error", f"Invalid JSON format in validation rules for template: {template_name}")
+                return
+                
+            if not loaded_rules:
+                QMessageBox.warning(self, "Warning", f"Template '{template_name}' has empty rules")
+                return
+                
+            # Clear existing rules
+            self.clear_rules()
+            
+            # Add loaded rules
+            rules_count = 0
+            section_counts = {
+                "header": 0,
+                "items": 0,
+                "summary": 0,
+                "metadata": 0,
+                "unknown": 0
+            }
+            
+            for field, rules in loaded_rules.items():
+                for rule in rules:
+                    if "type" not in rule or "params" not in rule:
+                        continue  # Skip invalid rules
+                        
+                    if field not in self.validation_rules:
+                        self.validation_rules[field] = []
+                    
+                    # Get section from rule or determine from path
+                    if "section" in rule:
+                        section_type = rule["section"]
+                    else:
+                        section_type = self.determine_section_type(field)
+                    
+                    # Store the rule with section info
+                    self.validation_rules[field].append({
+                        "type": rule["type"],
+                        "params": rule["params"],
+                        "section": section_type
+                    })
+                    
+                    # Update section counts
+                    section_counts[section_type] += 1
+                    
+                    # Add to UI list
                     row = self.rules_list.rowCount()
                     self.rules_list.insertRow(row)
                     
                     field_item = QTableWidgetItem(field)
                     field_item.setForeground(QColor(self.theme['dark']))
                     
-                    type_item = QTableWidgetItem(rule["type"])
-                    type_item.setForeground(QColor(self.theme['dark']))
+                    # Set different background colors based on section type
+                    if section_type == "header":
+                        field_item.setBackground(QColor("#E6F4FF"))  # Light blue
+                        field_item.setToolTip(f"Section: Header")
+                    elif section_type == "items":
+                        field_item.setBackground(QColor("#E6FFEA"))  # Light green
+                        field_item.setToolTip(f"Section: Items")
+                    elif section_type == "summary":
+                        field_item.setBackground(QColor("#FFF0E6"))  # Light orange
+                        field_item.setToolTip(f"Section: Summary")
+                    elif section_type == "metadata":
+                        field_item.setBackground(QColor("#F5F5F5"))  # Light gray
+                        field_item.setToolTip(f"Section: Metadata")
+                    
+                    # If template path, add additional highlight
+                    if '*' in field:
+                        field_item.setFont(QFont("Arial", 9, QFont.Bold))
+                        if field_item.toolTip():
+                            field_item.setToolTip(f"{field_item.toolTip()} - Template path with wildcards")
+                        else:
+                            field_item.setToolTip("Template path with wildcards")
+                    
+                    rule_type_item = QTableWidgetItem(rule["type"])
+                    rule_type_item.setForeground(QColor(self.theme['dark']))
                     
                     params_item = QTableWidgetItem(rule["params"])
                     params_item.setForeground(QColor(self.theme['dark']))
                     
                     self.rules_list.setItem(row, 0, field_item)
-                    self.rules_list.setItem(row, 1, type_item)
+                    self.rules_list.setItem(row, 1, rule_type_item)
                     self.rules_list.setItem(row, 2, params_item)
+                    
+                    rules_count += 1
             
-            # Only show success message if not in silent mode and rules were loaded
-            if not silent and self.validation_rules:
-                QMessageBox.information(self, "Success", "Rules loaded successfully")
+            # Create section summary for loaded rules
+            section_summary = ""
+            for section, count in section_counts.items():
+                if count > 0:
+                    section_summary += f"• {section.title()}: {count} rules\n"
+            
+            if rules_count > 0:
+                QMessageBox.information(
+                    self, 
+                    "Rules Loaded", 
+                    f"Successfully loaded {rules_count} validation rules from template:\n{template_name}\n\n"
+                    f"Rules by section:\n{section_summary}"
+                )
+            else:
+                QMessageBox.warning(self, "Warning", f"No valid rules found in template: {template_name}")
+        except sqlite3.Error as e:
+            QMessageBox.critical(self, "Database Error", f"Error loading rules from template: {str(e)}")
+            import traceback
+            traceback.print_exc()
         except Exception as e:
-            # Show error message even in silent mode for critical errors
-            QMessageBox.critical(self, "Error", f"Error loading rules: {str(e)}")
-            
+            QMessageBox.critical(self, "Error", f"Error loading rules from template: {str(e)}")
+            import traceback
+            traceback.print_exc()
+    
     def set_sample_data(self):
         """Set sample data for rules testing in rules manager mode"""
         if not self.is_rules_manager and not hasattr(self, 'json_tree'):
@@ -1497,8 +2042,21 @@ class ValidationScreen(QWidget):
                 self.template_combo.addItem(template_name, template_id)
                 
             conn.close()
+            
+            # Check if any templates were loaded
+            if self.template_combo.count() == 0:
+                self.template_combo.addItem("No templates available")
+                self.template_combo.setEnabled(False)
+                QMessageBox.warning(self, "Warning", "No templates available in database. Please create templates first.")
+            else:
+                self.template_combo.setEnabled(True)
+                print(f"Loaded {self.template_combo.count()} templates successfully")
+                
         except Exception as e:
             print(f"Error loading templates: {str(e)}")
+            self.template_combo.addItem("Error loading templates")
+            self.template_combo.setEnabled(False)
+            QMessageBox.critical(self, "Database Error", f"Error loading templates: {str(e)}")
             import traceback
             traceback.print_exc()
     
@@ -1512,19 +2070,26 @@ class ValidationScreen(QWidget):
             QMessageBox.warning(self, "Warning", "No templates available")
             return
             
-        try:
-            # Get the selected template ID from the combo box
-            template_id = self.template_combo.currentData()
-            template_name = self.template_combo.currentText()
-            
-            if not template_id:
-                QMessageBox.warning(self, "Warning", "No template selected")
-                return
+        # Get the selected template ID from the combo box
+        template_id = self.template_combo.currentData()
+        template_name = self.template_combo.currentText()
+        
+        if not template_id:
+            QMessageBox.warning(self, "Warning", "No template selected")
+            return
                 
+        try:
             # Connect to database
             import sqlite3
             conn = sqlite3.connect("invoice_templates.db")
             cursor = conn.cursor()
+            
+            # Verify template exists
+            cursor.execute("SELECT id FROM templates WHERE id = ?", (template_id,))
+            if not cursor.fetchone():
+                QMessageBox.warning(self, "Warning", f"Template with ID {template_id} not found")
+                conn.close()
+                return
             
             # Check if validation_rules column exists
             cursor.execute("PRAGMA table_info(templates)")
@@ -1532,38 +2097,85 @@ class ValidationScreen(QWidget):
             column_names = [col[1] for col in columns]
             
             if "validation_rules" not in column_names:
+                # Add the column if it doesn't exist
                 cursor.execute("ALTER TABLE templates ADD COLUMN validation_rules TEXT")
                 conn.commit()
+                print("Added validation_rules column to templates table")
             
-            # Convert rules to serializable format
+            # Convert rules to serializable format with section info
             serialized_rules = {}
+            section_counts = {
+                "header": 0,
+                "items": 0, 
+                "summary": 0,
+                "metadata": 0,
+                "unknown": 0
+            }
+            
             for field, rules in self.validation_rules.items():
                 serialized_rules[field] = []
                 for rule in rules:
+                    # Get section from rule or determine from path
+                    if "section" in rule:
+                        section_type = rule["section"]
+                    else:
+                        section_type = self.determine_section_type(field)
+                        
                     serialized_rules[field].append({
                         "type": rule["type"],
-                        "params": rule["params"]
+                        "params": rule["params"],
+                        "section": section_type
                     })
+                    
+                    # Update section counts
+                    section_counts[section_type] += 1
             
             # Save to database
+            json_rules = json.dumps(serialized_rules)
             cursor.execute(
                 "UPDATE templates SET validation_rules = ? WHERE id = ?",
-                (json.dumps(serialized_rules), template_id)
+                (json_rules, template_id)
             )
+            
+            if cursor.rowcount == 0:
+                QMessageBox.warning(self, "Warning", f"No changes made to template '{template_name}'")
+                conn.close()
+                return
+                
             conn.commit()
+            
+            # Verify update was successful
+            cursor.execute("SELECT validation_rules FROM templates WHERE id = ?", (template_id,))
+            result = cursor.fetchone()
+            
             conn.close()
+            
+            if not result or not result[0]:
+                QMessageBox.warning(self, "Warning", f"Failed to save rules to template '{template_name}'")
+                return
+            
+            # Create section summary text
+            section_summary = ""
+            for section, count in section_counts.items():
+                if count > 0:
+                    section_summary += f"• {section.title()}: {count} rules\n"
                 
             QMessageBox.information(
                 self, 
-                "Success", 
-                f"Rules saved successfully to template '{template_name}'\n\n"
+                "Rules Saved", 
+                f"Successfully saved {sum(len(rules) for rules in self.validation_rules.values())} validation rules to template:\n{template_name}\n\n"
+                f"Rules by section:\n{section_summary}\n"
                 f"These rules will be applied when validating data extracted with this template."
             )
+        except sqlite3.Error as e:
+            QMessageBox.critical(self, "Database Error", f"Error saving rules to template: {str(e)}")
+            import traceback
+            traceback.print_exc()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error saving rules to template: {str(e)}")
             import traceback
             traceback.print_exc()
-
+            
     def upload_json(self):
         """Upload JSON file for testing rules"""
         file_path, _ = QFileDialog.getOpenFileName(
@@ -1684,4 +2296,34 @@ class ValidationScreen(QWidget):
 <p>The system will find the appropriate paths in your data that match the template pattern.</p>
 """
         
-        QMessageBox.information(self, "Path Templates Help", help_text) 
+        QMessageBox.information(self, "Path Templates Help", help_text)
+
+    def delete_selected_rule(self):
+        """Delete the selected rule from the list"""
+        selected_row = self.rules_list.currentRow()
+        if selected_row < 0:
+            QMessageBox.warning(self, "Warning", "Please select a rule to delete")
+            return
+            
+        # Get the field and index to remove from validation_rules
+        field = self.rules_list.item(selected_row, 0).text()
+        rule_type = self.rules_list.item(selected_row, 1).text()
+        params = self.rules_list.item(selected_row, 2).text()
+        
+        # Remove the rule from validation_rules
+        if field in self.validation_rules:
+            # Find matching rule and remove it
+            for i, rule in enumerate(self.validation_rules[field]):
+                if rule["type"] == rule_type and rule["params"] == params:
+                    self.validation_rules[field].pop(i)
+                    break
+                    
+            # If no more rules for this field, remove the field entry
+            if not self.validation_rules[field]:
+                del self.validation_rules[field]
+        
+        # Remove from UI
+        self.rules_list.removeRow(selected_row)
+        
+        # Show success message
+        QMessageBox.information(self, "Success", f"Rule deleted successfully") 
