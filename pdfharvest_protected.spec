@@ -2,7 +2,7 @@
 
 block_cipher = None
 
-yvdyucqh = Analysis(
+tqjnphnu = Analysis(
     ['main.py'],  # Main script
     pathex=[],
     binaries=[],
@@ -46,11 +46,11 @@ yvdyucqh = Analysis(
     noarchive=False,
 )
 
-pkdpiyvp = PYZ(yvdyucqh.pure, yvdyucqh.zipped_data, cipher=block_cipher)
+mvkgxvqj = PYZ(tqjnphnu.pure, tqjnphnu.zipped_data, cipher=block_cipher)
 
-ydrhnvds = EXE(
-    pkdpiyvp,
-    yvdyucqh.scripts,
+jottyfjn = EXE(
+    mvkgxvqj,
+    tqjnphnu.scripts,
     [],
     exclude_binaries=True,
     name='PDFHarvest',
@@ -67,11 +67,11 @@ ydrhnvds = EXE(
     icon=None,
 )
 
-rboddrty = COLLECT(
-    ydrhnvds,
-    yvdyucqh.binaries,
-    yvdyucqh.zipfiles,
-    yvdyucqh.datas,
+scaasooj = COLLECT(
+    jottyfjn,
+    tqjnphnu.binaries,
+    tqjnphnu.zipfiles,
+    tqjnphnu.datas,
     strip=False,
     upx=True,
     upx_exclude=[],
